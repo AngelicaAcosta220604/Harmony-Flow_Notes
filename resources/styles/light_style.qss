@@ -1,0 +1,41 @@
+# Светлая тема (QSS)
+/* LIGHT THEME */
+
+QWidget {
+    background-color: #f7f7f7;
+    color: #222;
+    font-family: "Inter", "Segoe UI", sans-serif;
+    font-size: 14px;
+}
+
+QLineEdit, QTextEdit, QPlainTextEdit {
+    background: #ffffff;
+    border: 1px solid #cccccc;
+    border-radius: 6px;
+    padding: 6px;
+}
+
+QPushButton {
+    background: #e6e6e6;
+    border-radius: 6px;
+    padding: 6px 12px;
+}
+
+QPushButton:hover {
+    background: #dcdcdc;
+}
+
+QPushButton:pressed {
+    background: #cfcfcf;
+}
+
+QScrollBar:vertical {
+    background: #eaeaea;
+    width: 10px;
+    border-radius: 5px;
+}
+
+QScrollBar::handle:vertical {
+    background: #c5c5c5;
+    border-radius: 5px;
+}
