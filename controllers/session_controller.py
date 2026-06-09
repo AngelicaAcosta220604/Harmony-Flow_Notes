@@ -47,7 +47,16 @@ class SessionController:
             (topic_id, now)
         )
         return cursor.lastrowid
+###RRRR
+    # Получить все сессии
+    rows = db.fetchall("SELECT * FROM sessions")
+    sessions = [Session.from_row(row) for row in rows]
 
+    # Получить одну сессию
+    row = db.fetchone("SELECT * FROM sessions WHERE id = ?", (5,))
+    if row:
+        session = Session.from_row(row)
+        ####RRRRR
     # ---------------------------------------------------------
     # ПОЛУЧЕНИЕ СЕССИИ
     # ---------------------------------------------------------

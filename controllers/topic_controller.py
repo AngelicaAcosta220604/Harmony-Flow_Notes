@@ -11,116 +11,57 @@ TopicController — контроллер для работы с темами и 
 
 Это один из ключевых модулей приложения.
 """
-
+# controllers/topic_controller.py
 from database.db_manager import db
 from models.topic import Topic
+from typing import List, Optional
 
 
 class TopicController:
+    """Контроллер для управления темами и папками."""
 
-    # ---------------------------------------------------------
-    # СОЗДАНИЕ ТЕМЫ
-    # ---------------------------------------------------------
-    def create_topic(self, name: str, parent_id: int | None = None) -> int:
-        """
-        Создаёт новую тему или папку.
-        Возвращает id созданной записи.
-        """
-        query = """
-            INSERT INTO topics (name, parent_id)
-            VALUES (?, ?)
-        """
-        cursor = db.execute(query, (name, parent_id))
-        return cursor.lastrowid
-
-    # ---------------------------------------------------------
-    # ПОЛУЧЕНИЕ ВСЕХ ТЕМ
-    # ---------------------------------------------------------
-    def get_all_topics(self) -> list[Topic]:
-        """
-        Возвращает список всех тем в виде объектов Topic.
-        """
-        rows = db.fetchall("SELECT * FROM topics ORDER BY id ASC")
+    def get_all_topics(self) -> List[Topic]:
+        """Возвращает все темы и папки."""
+        rows = db.fetchall("SELECT * FROM topics ORDER BY parent_id, name")
         return [Topic.from_row(row) for row in rows]
 
-    # ---------------------------------------------------------
-    # ПОЛУЧЕНИЕ ТЕМЫ ПО ID
-    # ---------------------------------------------------------
-    def get_topic(self, topic_id: int) -> Topic | None:
-        """
-        Возвращает тему по её id.
-        """
+    def get_topic(self, topic_id: int) -> Optional[Topic]:
+        """Возвращает тему по id."""
         row = db.fetchone("SELECT * FROM topics WHERE id = ?", (topic_id,))
         return Topic.from_row(row) if row else None
 
-    # ---------------------------------------------------------
-    # ОБНОВЛЕНИЕ НАЗВАНИЯ ТЕМЫ
-    # ---------------------------------------------------------
-    def rename_topic(self, topic_id: int, new_name: str):
-        """
-        Переименовывает тему.
-        """
-        query = "UPDATE topics SET name = ? WHERE id = ?"
-        db.execute(query, (new_name, topic_id))
+    def add_topic(self, name: str, parent_id: int = None, type: str = "topic") -> int:
+        """Добавляет новую тему или папку. Возвращает id созданной записи."""
+        return db.execute(
+            "INSERT INTO topics (name, parent_id, type) VALUES (?, ?, ?)",
+            (name, parent_id, type)
+        )
 
-    # ---------------------------------------------------------
-    # ПОЛУЧЕНИЕ ВСЕХ ПОДТЕМ
-    # ---------------------------------------------------------
-    def get_children(self, parent_id: int) -> list[Topic]:
-        """
-        Возвращает список дочерних тем.
-        """
-        rows = db.fetchall("SELECT * FROM topics WHERE parent_id = ?", (parent_id,))
-        return [Topic.from_row(row) for row in rows]
+    def rename_topic(self, topic_id: int, new_name: str) -> None:
+        db.execute(
+            "UPDATE topics SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (new_name, topic_id)
+        )
 
-    # ---------------------------------------------------------
-    # ПЕРЕМЕЩЕНИЕ ТЕМЫ
-    # ---------------------------------------------------------
-    def move_topic(self, topic_id: int, new_parent_id: int | None):
-        """
-        Меняет родителя темы.
-        """
-        query = "UPDATE topics SET parent_id = ? WHERE id = ?"
-        db.execute(query, (new_parent_id, topic_id))
+    def move_topic(self, topic_id: int, new_parent_id: Optional[int]) -> None:
+        db.execute(
+            "UPDATE topics SET parent_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (new_parent_id, topic_id)
+        )
 
-    # ---------------------------------------------------------
-    # УДАЛЕНИЕ ТЕМЫ (КАСКАДНОЕ)
-    # ---------------------------------------------------------
-    def delete_topic(self, topic_id: int):
-        """
-        Удаляет тему и ВСЕ связанные данные:
-        - заметки
-        - задачи
-        - карточки
-        - сессии
-        - логи состояния
-        - быстрые записи
-        - подтемы (рекурсивно)
-        """
-
-        # 1. Удаляем дочерние темы рекурсивно
-        children = self.get_children(topic_id)
-        for child in children:
-            self.delete_topic(child.id)
-
-        # 2. Удаляем заметки
+    def delete_topic(self, topic_id: int) -> None:
+        """Удаляет тему и всё связанное с ней (каскадно)."""
+        # Удаляем связанные данные (заметки, карточки, задачи, сессии)
         db.execute("DELETE FROM notes WHERE topic_id = ?", (topic_id,))
-
-        # 3. Удаляем задачи
-        db.execute("DELETE FROM tasks WHERE topic_id = ?", (topic_id,))
-
-        # 4. Удаляем карточки
         db.execute("DELETE FROM flashcards WHERE topic_id = ?", (topic_id,))
-
-        # 5. Удаляем быстрые записи
+        db.execute("DELETE FROM tasks WHERE topic_id = ?", (topic_id,))
         db.execute("DELETE FROM quick_notes WHERE topic_id = ?", (topic_id,))
-
-        # 6. Удаляем сессии и их логи
-        sessions = db.fetchall("SELECT id FROM sessions WHERE topic_id = ?", (topic_id,))
-        for s in sessions:
-            session_id = s["id"]
-            db.execute("DELETE FROM session_state_logs WHERE session_id = ?", (session_id,))
-            db.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
-
-        # 7. Удаляем саму тему
+        db.execute("DELETE FROM sessions WHERE topic_id = ?", (topic_id,))
+        # Удаляем саму тему
         db.execute("DELETE FROM topics WHERE id = ?", (topic_id,))
+        # Удаляем дочерние темы (если есть)
+        db.execute("DELETE FROM topics WHERE parent_id = ?", (topic_id,))
+
+    def get_topic_tree(self) -> List[Topic]:
+        """Возвращает все темы, отсортированные для построения дерева."""
+        return self.get_all_topics()
