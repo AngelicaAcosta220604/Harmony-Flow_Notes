@@ -4,7 +4,7 @@
 которые описаны в техническом задании HFlow.
 
 Переменная INIT_QUERIES — это список SQL-строк.
-db_manager.init_db() проходит по ним и создаёт таблицы.
+Db_manager.init_db() проходит по ним и создаёт таблицы.
 """
 
 INIT_QUERIES = [
@@ -12,27 +12,32 @@ INIT_QUERIES = [
     # ---------------------------------------------------------
     # 1. Таблица тем (папки + темы)
     # ---------------------------------------------------------
+    # topics (папки и темы)
     """
-    CREATE TABLE IF NOT EXISTS topics (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        parent_id INTEGER,
-        name TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-    """,
-
+        CREATE TABLE IF NOT EXISTS topics (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    description TEXT,
+    parent_id INTEGER,
+    type TEXT DEFAULT 'topic',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (parent_id) REFERENCES topics (id)
+)
+    """
     # ---------------------------------------------------------
     # 2. Таблица заметок
     # ---------------------------------------------------------
     """
     CREATE TABLE IF NOT EXISTS notes (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        topic_id INTEGER,
-        title TEXT NOT NULL,
-        content TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    topic_id INTEGER,
+    title TEXT NOT NULL,
+    content TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE
+);
     """,
 
     # ---------------------------------------------------------
@@ -40,14 +45,16 @@ INIT_QUERIES = [
     # ---------------------------------------------------------
     """
     CREATE TABLE IF NOT EXISTS tasks (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        topic_id INTEGER,
-        title TEXT NOT NULL,
-        description TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        deadline TIMESTAMP,
-        status TEXT DEFAULT 'active'
-    );
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    topic_id INTEGER,
+    title TEXT NOT NULL,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    deadline TIMESTAMP,
+    status TEXT DEFAULT 'active',
+    FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE
+);
     """,
 
     # ---------------------------------------------------------
@@ -56,10 +63,14 @@ INIT_QUERIES = [
     """
     CREATE TABLE IF NOT EXISTS flashcards (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        topic_id INTEGER,
+        topic_id INTEGER NOT NULL,
+        type TEXT DEFAULT 'free',
         question TEXT,
         answer TEXT,
-        type TEXT NOT NULL
+        content TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (topic_id) REFERENCES topics (id)
     );
     """,
 
@@ -76,6 +87,8 @@ INIT_QUERIES = [
     focus INTEGER,
     energy INTEGER,
     interest INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE
 );
 

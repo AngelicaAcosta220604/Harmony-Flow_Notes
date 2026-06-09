@@ -1,43 +1,27 @@
 # models/topic.py
-"""
-Модель темы (папки или подтемы).
-Используется для структуры знаний.
-"""
-
 class Topic:
-    def __init__(self, id, parent_id, name, created_at):
+    def __init__(self, id: int = None, name: str = "", description: str = "",
+                 parent_id: int = None, type: str = "topic",
+                 created_at: str = None, updated_at: str = None):
         self.id = id
-        self.parent_id = parent_id
         self.name = name
+        self.description = description
+        self.parent_id = parent_id
+        self.type = type
         self.created_at = created_at
+        self.updated_at = updated_at
 
     @classmethod
-    def from_row(cls, row):
-        """Создание объекта из sqlite3.Row"""
+    def from_row(cls, row: dict):
         return cls(
-            id=row["id"],
-            parent_id=row["parent_id"],
-            name=row["name"],
-            created_at=row["created_at"]
-        )# models/topic.py
-"""
-Модель темы (папки или подтемы).
-Используется для структуры знаний.
-"""
-
-class Topic:
-    def __init__(self, id, parent_id, name, created_at):
-        self.id = id
-        self.parent_id = parent_id
-        self.name = name
-        self.created_at = created_at
-
-    @classmethod
-    def from_row(cls, row):
-        """Создание объекта из sqlite3.Row"""
-        return cls(
-            id=row["id"],
-            parent_id=row["parent_id"],
-            name=row["name"],
-            created_at=row["created_at"]
+            id=row.get("id"),
+            name=row.get("name", ""),
+            description=row.get("description", ""),
+            parent_id=row.get("parent_id"),
+            type=row.get("type", "topic"),
+            created_at=row.get("created_at"),
+            updated_at=row.get("updated_at")
         )
+
+    def __repr__(self):
+        return f"<Topic {self.id}: {self.name}>"

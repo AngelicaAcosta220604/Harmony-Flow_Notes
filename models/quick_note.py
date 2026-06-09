@@ -1,22 +1,19 @@
 # models/quick_note.py
-"""
-Быстрая запись, созданная во время фокус-сессии.
-"""
-
 class QuickNote:
-    def __init__(self, id, session_id, topic_id, text, created_at):
+    def __init__(self, id: int = None, session_id: int = None, topic_id: int = None,
+                 content: str = "", created_at: str = None):
         self.id = id
         self.session_id = session_id
         self.topic_id = topic_id
-        self.text = text
+        self.content = content
         self.created_at = created_at
 
     @classmethod
-    def from_row(cls, row):
+    def from_row(cls, row: dict):
         return cls(
-            id=row["id"],
-            session_id=row["session_id"],
-            topic_id=row["topic_id"],
-            text=row["text"],
-            created_at=row["created_at"]
+            id=row.get("id"),
+            session_id=row.get("session_id"),
+            topic_id=row.get("topic_id"),
+            content=row.get("content", ""),
+            created_at=row.get("created_at")
         )

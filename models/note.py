@@ -1,11 +1,7 @@
 # models/note.py
-"""
-Модель заметки.
-Поддерживает заголовок, текст, дату создания и обновления.
-"""
-
 class Note:
-    def __init__(self, id, topic_id, title, content, created_at, updated_at):
+    def __init__(self, id: int = None, topic_id: int = None, title: str = "",
+                 content: str = "", created_at: str = None, updated_at: str = None):
         self.id = id
         self.topic_id = topic_id
         self.title = title
@@ -14,12 +10,12 @@ class Note:
         self.updated_at = updated_at
 
     @classmethod
-    def from_row(cls, row):
+    def from_row(cls, row: dict):
         return cls(
-            id=row["id"],
-            topic_id=row["topic_id"],
-            title=row["title"],
-            content=row["content"],
-            created_at=row["created_at"],
-            updated_at=row["updated_at"]
+            id=row.get("id"),
+            topic_id=row.get("topic_id"),
+            title=row.get("title", ""),
+            content=row.get("content", ""),
+            created_at=row.get("created_at"),
+            updated_at=row.get("updated_at")
         )

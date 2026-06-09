@@ -1,121 +1,189 @@
 # database/db_manager.py
-"""
-DatabaseManager — центральный класс для работы с SQLite.
-Он отвечает за:
-- подключение к базе данных
-- выполнение запросов
-- возврат результатов
-- инициализацию таблиц
-- управление транзакциями
-
-Это фундамент всего приложения.
-"""
-
 import sqlite3
-from pathlib import Path
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Tuple
+
+# Путь к базе данных (файл создастся в корне проекта)
+DB_PATH = "hflow.db"
 
 
 class DatabaseManager:
-    """
-    Класс-обёртка над sqlite3, обеспечивающий удобный доступ к базе данных.
-    Используется всеми контроллерами.
-    """
+    """Менеджер для работы с SQLite базой данных."""
 
-    def __init__(self, db_name: str = "hflow.db"):
-        """
-        Подключение к базе данных.
-        Если файла нет — SQLite создаст его автоматически.
+    def __init__(self, db_path: str = DB_PATH):
+        self.db_path = db_path
+        self._init_tables()
 
-        row_factory позволяет получать строки в виде словарей:
-        row["column_name"] вместо row[0]
-        """
-        # Путь к файлу базы данных
-        self.db_path = Path(__file__).resolve().parent / db_name
+    def _get_connection(self) -> sqlite3.Connection:
+        """Возвращает подключение к БД с row_factory = dict для удобства."""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row  # строки будут как словари
+        return conn
 
-        # Попытка подключения
-        try:
-            self.conn = sqlite3.connect(self.db_path)
-        except sqlite3.DatabaseError:
-            # Если файл не является SQLite — удаляем
-            self.db_path.unlink(missing_ok=True)
-            # Создаём новый
-            self.conn = sqlite3.connect(self.db_path)
+    def _init_tables(self):
+        """Создаёт все таблицы, если их нет."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
 
-        # Настройка формата строк
-        self.conn.row_factory = sqlite3.Row
-        self.cursor = self.conn.cursor()
+            # topics (папки и темы)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS topics (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    description TEXT,
+                    parent_id INTEGER,
+                    type TEXT DEFAULT 'topic',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (parent_id) REFERENCES topics (id)
+                )
+            """)
 
-        # Включаем foreign keys
-        self.cursor.execute("PRAGMA foreign_keys = ON;")
+            # notes (заметки)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS notes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    topic_id INTEGER NOT NULL,
+                    title TEXT,
+                    content TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (topic_id) REFERENCES topics (id)
+                )
+            """)
 
-        # ⚠ ВАЖНО: сразу инициализируем БД по INIT_QUERIES
-        self.init_db()
+            # flashcards (карточки)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS flashcards (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    topic_id INTEGER NOT NULL,
+                    type TEXT DEFAULT 'free',
+                    question TEXT,
+                    answer TEXT,
+                    content TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (topic_id) REFERENCES topics (id)
+                )
+            """)
 
-    # ----------------------------------------------------------------------
-    # БАЗОВЫЕ ОПЕРАЦИИ
-    # ----------------------------------------------------------------------
+            # tasks (задачи)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS tasks (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    topic_id INTEGER,
+                    title TEXT NOT NULL,
+                    description TEXT,
+                    deadline TIMESTAMP,
+                    status TEXT DEFAULT 'active',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    completed_at TIMESTAMP,
+                    FOREIGN KEY (topic_id) REFERENCES topics (id)
+                )
+            """)
 
-    def execute(self, query: str, params: tuple = ()):
-        """
-        Выполняет запрос, который изменяет данные (INSERT, UPDATE, DELETE).
-        Возвращает cursor, чтобы можно было получить lastrowid.
-        """
-        self.cursor.execute(query, params)
-        self.conn.commit()
-        return self.cursor
+            # sessions (сессии)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS sessions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    topic_id INTEGER NOT NULL,
+                    start_time TIMESTAMP,
+                    end_time TIMESTAMP,
+                    duration_minutes INTEGER,
+                    focus INTEGER,
+                    status TEXT DEFAULT 'active',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (topic_id) REFERENCES topics (id)
+                )
+            """)
 
-    def fetchone(self, query: str, params: tuple = ()):
-        """
-        Выполняет SELECT и возвращает одну строку.
-        Если данных нет — вернёт None.
-        """
-        self.cursor.execute(query, params)
-        return self.cursor.fetchone()
+            # session_state_logs (логи концентрации/энергии/интереса)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS session_state_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id INTEGER NOT NULL,
+                    metric TEXT NOT NULL,
+                    value INTEGER NOT NULL,
+                    minute INTEGER,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (session_id) REFERENCES sessions (id)
+                )
+            """)
 
-    def fetchall(self, query: str, params: tuple = ()):
-        """
-        Выполняет SELECT и возвращает список строк.
-        Каждая строка — sqlite3.Row (словарь).
-        """
-        self.cursor.execute(query, params)
-        return self.cursor.fetchall()
+            # quick_notes (быстрые записи)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS quick_notes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id INTEGER NOT NULL,
+                    topic_id INTEGER NOT NULL,
+                    content TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (session_id) REFERENCES sessions (id),
+                    FOREIGN KEY (topic_id) REFERENCES topics (id)
+                )
+            """)
 
-    # ----------------------------------------------------------------------
-    # ИНИЦИАЛИЗАЦИЯ БАЗЫ
-    # ----------------------------------------------------------------------
+            # app_settings (настройки)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS app_settings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    setting_key TEXT UNIQUE NOT NULL,
+                    setting_value TEXT NOT NULL
+                )
+            """)
 
-    def init_db(self):
-        """
-        Создаёт все таблицы, описанные в db_queries.py.
-        Теперь вызывается автоматически в __init__.
-        """
-        from .db_queries import INIT_QUERIES
+            # Добавляем настройки по умолчанию, если их нет
+            default_settings = [
+                ("user_name", "Пользователь"),
+                ("theme", "light"),
+                ("activity_check_interval_minutes", "15"),
+                ("auto_pause_minutes", "10"),
+                ("auto_save_interval_seconds", "60"),
+                ("notifications_enabled", "true"),
+                ("default_sound", "off"),
+            ]
+            for key, value in default_settings:
+                cursor.execute("""
+                    INSERT OR IGNORE INTO app_settings (setting_key, setting_value)
+                    VALUES (?, ?)
+                """, (key, value))
 
-        # Если INIT_QUERIES — список строк
-        if isinstance(INIT_QUERIES, (list, tuple)):
-            for query in INIT_QUERIES:
-                self.cursor.execute(query)
-        else:
-            # Если это одна большая строка со скриптом
-            self.cursor.executescript(INIT_QUERIES)
+            conn.commit()
 
-        self.conn.commit()
+    # ---------------------------------------------------------
+    # УНИВЕРСАЛЬНЫЕ МЕТОДЫ ДЛЯ ЗАПРОСОВ
+    # ---------------------------------------------------------
 
-    # ----------------------------------------------------------------------
-    # УТИЛИТЫ
-    # ----------------------------------------------------------------------
+    def fetchall(self, query: str, params: tuple = ()) -> List[Dict]:
+        """Выполняет SELECT и возвращает список словарей."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
 
-    def close(self):
-        """Закрывает соединение с базой данных."""
-        self.conn.close()
+    def fetchone(self, query: str, params: tuple = ()) -> Optional[Dict]:
+        """Выполняет SELECT и возвращает один словарь."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            row = cursor.fetchone()
+            return dict(row) if row else None
 
-    def __del__(self):
-        """Гарантированное закрытие соединения при уничтожении объекта."""
-        try:
-            self.conn.close()
-        except:
-            pass
+    def execute(self, query: str, params: tuple = ()) -> int:
+        """Выполняет INSERT/UPDATE/DELETE и возвращает lastrowid."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            conn.commit()
+            return cursor.lastrowid
+
+    def executemany(self, query: str, params_list: List[tuple]) -> None:
+        """Выполняет массовую вставку (например, для тестов)."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.executemany(query, params_list)
+            conn.commit()
 
 
-# Глобальный экземпляр БД, который используется во всём приложении
+# Глобальный экземпляр для всего приложения (один объект на всё)
 db = DatabaseManager()

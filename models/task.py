@@ -1,27 +1,26 @@
 # models/task.py
-"""
-Модель задачи.
-Содержит дедлайн, статус и описание.
-"""
-
 class Task:
-    def __init__(self, id, topic_id, title, description, created_at, deadline, status):
+    def __init__(self, id: int = None, topic_id: int = None, title: str = "",
+                 description: str = "", deadline: str = None, status: str = "active",
+                 created_at: str = None, completed_at: str = None):
         self.id = id
         self.topic_id = topic_id
         self.title = title
         self.description = description
-        self.created_at = created_at
         self.deadline = deadline
         self.status = status
+        self.created_at = created_at
+        self.completed_at = completed_at
 
     @classmethod
-    def from_row(cls, row):
+    def from_row(cls, row: dict):
         return cls(
-            id=row["id"],
-            topic_id=row["topic_id"],
-            title=row["title"],
-            description=row["description"],
-            created_at=row["created_at"],
-            deadline=row["deadline"],
-            status=row["status"]
+            id=row.get("id"),
+            topic_id=row.get("topic_id"),
+            title=row.get("title", ""),
+            description=row.get("description", ""),
+            deadline=row.get("deadline"),
+            status=row.get("status", "active"),
+            created_at=row.get("created_at"),
+            completed_at=row.get("completed_at")
         )

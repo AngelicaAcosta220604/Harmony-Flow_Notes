@@ -1,17 +1,14 @@
 # models/settings.py
-"""
-Модель настройки приложения.
-Хранит пары ключ-значение.
-"""
-
 class Setting:
-    def __init__(self, key, value):
+    def __init__(self, id: int = None, key: str = "", value: str = ""):
+        self.id = id
         self.key = key
         self.value = value
 
     @classmethod
-    def from_row(cls, row):
+    def from_row(cls, row: dict):
         return cls(
-            key=row["key"],
-            value=row["value"]
+            id=row.get("id"),
+            key=row.get("setting_key", ""),
+            value=row.get("setting_value", "")
         )
