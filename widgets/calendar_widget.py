@@ -1,134 +1,79 @@
-# Календарь задач
+# widgets/calendar_widget.py
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QGridLayout, QSizePolicy, Frame
+    QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
+    QCalendarWidget, QLabel, QListWidget, QListWidgetItem,
+    QFrame  # ← правильно: QFrame, а не Frame
 )
-from PySide6.QtCore import Qt, QDate
+from PySide6.QtCore import Qt, Signal, QDate
+from datetime import date
 
 
 class CalendarWidget(QWidget):
-    """
-    Прототип календаря (месяц).
-    Позже сюда можно подключить CalendarController.
-    """
+    """Календарь для отображения задач по дням."""
+
+    taskSelected = Signal(object)  # сигнал при выборе задачи
 
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        self.current_date = QDate.currentDate()
+        layout = QVBoxLayout(self)
 
-        # Основной layout
-        self.layout = QVBoxLayout(self)
-        self.setLayout(self.layout)
-
-        # ---------------------------------------------------------
-        # Верхняя панель: переключатели (День / Неделя / Месяц)
-        # ---------------------------------------------------------
-        mode_bar = QHBoxLayout()
-
+        # Переключение режимов
+        mode_layout = QHBoxLayout()
         self.btn_day = QPushButton("День")
         self.btn_week = QPushButton("Неделя")
         self.btn_month = QPushButton("Месяц")
+        mode_layout.addWidget(self.btn_day)
+        mode_layout.addWidget(self.btn_week)
+        mode_layout.addWidget(self.btn_month)
+        mode_layout.addStretch()
+        layout.addLayout(mode_layout)
 
-        self.btn_month.setEnabled(False)  # активный режим
+        # Календарь
+        self.calendar = QCalendarWidget()
+        self.calendar.clicked.connect(self._on_date_selected)
+        layout.addWidget(self.calendar)
 
-        mode_bar.addWidget(self.btn_day)
-        mode_bar.addWidget(self.btn_week)
-        mode_bar.addWidget(self.btn_month)
-        mode_bar.addStretch()
+        # Список задач на выбранный день (рамка)
+        tasks_frame = QFrame()  # ← исправлено: QFrame
+        tasks_frame.setFrameShape(QFrame.Box)
+        tasks_layout = QVBoxLayout(tasks_frame)
 
-        self.layout.addLayout(mode_bar)
+        self.tasks_label = QLabel("Задачи на день:")
+        tasks_layout.addWidget(self.tasks_label)
 
-        # ---------------------------------------------------------
-        # Заголовок месяца
-        # ---------------------------------------------------------
-        self.month_label = QLabel()
-        self.month_label.setAlignment(Qt.AlignCenter)
-        self.month_label.setStyleSheet("font-size: 18px; font-weight: bold;")
-        self.layout.addWidget(self.month_label)
+        self.tasks_list = QListWidget()
+        self.tasks_list.itemClicked.connect(self._on_task_clicked)
+        tasks_layout.addWidget(self.tasks_list)
 
-        # ---------------------------------------------------------
-        # Сетка календаря
-        # ---------------------------------------------------------
-        self.grid = QGridLayout()
-        self.layout.addLayout(self.grid)
+        layout.addWidget(tasks_frame)
 
-        # Заголовки дней недели
-        weekdays = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
-        for i, name in enumerate(weekdays):
-            lbl = QLabel(name)
-            lbl.setAlignment(Qt.AlignCenter)
-            lbl.setStyleSheet("font-weight: bold;")
-            self.grid.addWidget(lbl, 0, i)
+        # Подключение кнопок
+        self.btn_day.clicked.connect(lambda: self._set_mode("day"))
+        self.btn_week.clicked.connect(lambda: self._set_mode("week"))
+        self.btn_month.clicked.connect(lambda: self._set_mode("month"))
 
-        # Сетка дней (6 строк × 7 столбцов)
-        self.day_cells = []
-        for row in range(1, 7):
-            row_cells = []
-            for col in range(7):
-                cell = QLabel("")
-                cell.setAlignment(Qt.AlignCenter)
-                cell.setFrameStyle(QLabel.Panel | QLabel.Raised)
-                cell.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-                cell.setMinimumHeight(40)
-                row_cells.append(cell)
-                self.grid.addWidget(cell, row, col)
-            self.day_cells.append(row_cells)
+        self._current_mode = "month"
 
-        # Отрисовываем текущий месяц
-        self.update_calendar()
+    def _set_mode(self, mode: str):
+        self._current_mode = mode
+        # Здесь будет логика смены отображения
+        print(f"[CalendarWidget] Режим: {mode}")
 
-    # ---------------------------------------------------------
-    # Обновление календаря
-    # ---------------------------------------------------------
-    def update_calendar(self):
-        """Заполняет сетку днями текущего месяца."""
-        year = self.current_date.year()
-        month = self.current_date.month()
+    def _on_date_selected(self, qdate: QDate):
+        selected_date = date(qdate.year(), qdate.month(), qdate.day())
+        print(f"[CalendarWidget] Выбрана дата: {selected_date}")
+        # Здесь будет загрузка задач для даты
 
-        self.month_label.setText(self.current_date.toString("MMMM yyyy"))
+    def _on_task_clicked(self, item: QListWidgetItem):
+        print(f"[CalendarWidget] Выбрана задача: {item.text()}")
+        # Здесь будет сигнал для открытия задачи
 
-        first_day = QDate(year, month, 1)
-        start_col = (first_day.dayOfWeek() + 6) % 7  # Пн=0, Вс=6
-
-        days_in_month = first_day.daysInMonth()
-
-        # Очищаем сетку
-        for row in self.day_cells:
-            for cell in row:
-                cell.setText("")
-                cell.setStyleSheet("")
-
-        # Заполняем числа
-        day = 1
-        row = 0
-        col = start_col
-
-        while day <= days_in_month:
-            cell = self.day_cells[row][col]
-            cell.setText(str(day))
-
-            # Подсветка сегодняшнего дня
-            if (
-                day == QDate.currentDate().day() and
-                month == QDate.currentDate().month() and
-                year == QDate.currentDate().year()
-            ):
-                cell.setStyleSheet("background-color: #d0eaff; border: 1px solid #3399ff;")
-
-            day += 1
-            col += 1
-            if col > 6:
-                col = 0
-                row += 1
-
-    # ---------------------------------------------------------
-    # Методы переключения месяца (можно подключить к кнопкам)
-    # ---------------------------------------------------------
-    def next_month(self):
-        self.current_date = self.current_date.addMonths(1)
-        self.update_calendar()
-
-    def prev_month(self):
-        self.current_date = self.current_date.addMonths(-1)
-        self.update_calendar()
+    def update_tasks(self, tasks: list, selected_date: date):
+        """Обновляет список задач для выбранной даты."""
+        self.tasks_label.setText(f"Задачи на {selected_date}:")
+        self.tasks_list.clear()
+        for task in tasks:
+            item = QListWidgetItem(task.get("title", str(task)))
+            item.setData(Qt.UserRole, task)
+            self.tasks_list.addItem(item)
