@@ -3,6 +3,7 @@ from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QStackedWidget, QLabel, QFrame
 )
+from views.topics_view import TopicsView
 from PySide6.QtCore import Qt
 from widgets.tree_widget import TreeWidget
 from controllers.topic_controller import TopicController
@@ -75,10 +76,8 @@ class MainWindow(QMainWindow):
         page_home.setAlignment(Qt.AlignCenter)
         page_home.setStyleSheet("font-size: 20px;")
 
-        # Страница 2: Темы (с деревом, которому передаём контроллер)
-        self.page_topics = TreeWidget(topic_controller=self.topic_controller)
-
-        # ПОДПИСКА НА СИГНАЛ ВЫБОРА ТЕМЫ
+        # Страница 2: Темы (главная страница со списком тем)
+        self.page_topics = TopicsView(topic_controller=self.topic_controller)
         self.page_topics.topic_selected.connect(self.on_topic_selected)
 
         # Страница 3: Фокус
@@ -98,12 +97,12 @@ class MainWindow(QMainWindow):
         page_settings.setAlignment(Qt.AlignCenter)
 
         # Добавляем страницы
-        self.stack.addWidget(page_home)           # индекс 0
-        self.stack.addWidget(self.page_topics)    # индекс 1
-        self.stack.addWidget(page_focus)          # индекс 2
-        self.stack.addWidget(page_tasks)          # индекс 3
-        self.stack.addWidget(page_analytics)      # индекс 4
-        self.stack.addWidget(page_settings)       # индекс 5
+        self.stack.addWidget(page_home)  # индекс 0
+        self.stack.addWidget(self.page_topics)  # индекс 1
+        self.stack.addWidget(page_focus)  # индекс 2
+        self.stack.addWidget(page_tasks)  # индекс 3
+        self.stack.addWidget(page_analytics)  # индекс 4
+        self.stack.addWidget(page_settings)  # индекс 5
 
         # ================== Собираем всё ==================
         main_layout.addWidget(sidebar)
