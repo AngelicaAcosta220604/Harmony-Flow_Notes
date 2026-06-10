@@ -89,7 +89,6 @@ class DatabaseManager:
                     start_time TIMESTAMP,
                     end_time TIMESTAMP,
                     duration_minutes INTEGER,
-                    focus INTEGER,
                     status TEXT DEFAULT 'active',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (topic_id) REFERENCES topics (id)
