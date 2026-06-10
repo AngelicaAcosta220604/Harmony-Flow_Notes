@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QComboBox, QGridLayout, QScrollArea
-
+from views.note_editor_view import NoteEditorView
 
 class TopicView(QWidget):
     back_requested = Signal()  # возврат к списку тем
@@ -108,7 +108,13 @@ class TopicView(QWidget):
         # ---------------------------------------------------------
         # Страница 2: Редактирование записи (режим редактирования)
         # ---------------------------------------------------------
-        self.edit_view_page = self._create_edit_view_page()
+        self.edit_view_page = NoteEditorView(
+            note_controller=note_controller,
+            flashcard_controller=flashcard_controller,
+            task_controller=task_controller
+        )
+        self.edit_view_page.back_requested.connect(lambda: self.stack.setCurrentIndex(0))
+        self.edit_view_page.note_saved.connect(self._on_note_saved)
         self.stack.addWidget(self.edit_view_page)  # индекс 2
 
         # ---------------------------------------------------------
@@ -259,6 +265,10 @@ class TopicView(QWidget):
 
         return page
 
+    def _on_note_saved(self, note_id: int):
+        """Обновляет список после сохранения"""
+        self._load_notes_list()
+        self._update_read_view()
     # ==================== НАВИГАЦИЯ МЕЖДУ РЕЖИМАМИ ====================
 
     def _switch_to_notes_main(self):
@@ -275,8 +285,9 @@ class TopicView(QWidget):
 
     def _switch_to_edit_mode(self):
         """Переход из режима чтения в режим редактирования."""
-        self._load_note_to_editor()
-        self.stack.setCurrentIndex(2)
+        if self.current_note_id:
+            self.edit_view_page.load_note(self.current_note_id, self.topic_id)
+            self.stack.setCurrentIndex(2)
 
     def _save_and_go_back(self):
         """Сохраняет заметку и возвращается в режим чтения."""
@@ -631,10 +642,11 @@ class TopicView(QWidget):
         if not ok or not title.strip():
             title = "Новая запись"
 
+        # Создаём заметку через контроллер
         note_id = self.note_controller.create_note(self.topic_id, title.strip(), "")
         self.current_note_id = note_id
-        self._load_notes_list()
 
-        # Открываем в режиме редактирования
-        self.edit_editor.setPlainText("")
+        # Загружаем в редактор
+        self.edit_view_page.load_note(note_id, self.topic_id)
+        self._load_notes_list()
         self.stack.setCurrentIndex(2)
