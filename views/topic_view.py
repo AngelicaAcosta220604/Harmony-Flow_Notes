@@ -381,7 +381,7 @@ class TopicView(QWidget):
                 self._clear_layout(item.layout())
 
     def _create_note_card_list(self, note):
-        """Создаёт карточку заметки для режима списка."""
+        """Создаёт карточку заметки для режима списка с кнопками."""
         card = QFrame()
         card.setFrameShape(QFrame.Box)
         card.setStyleSheet("""
@@ -397,21 +397,66 @@ class TopicView(QWidget):
                 border-color: #AAA;
             }
         """)
-        card.setCursor(Qt.PointingHandCursor)
 
         layout = QVBoxLayout(card)
+
+        # Верхняя строка: название + кнопки
+        header_layout = QHBoxLayout()
 
         title = note.title if note.title else "Без названия"
         title_label = QLabel(title)
         title_label.setStyleSheet("font-size: 14px; font-weight: bold;")
-        layout.addWidget(title_label)
+        title_label.setCursor(Qt.PointingHandCursor)
+        title_label.mousePressEvent = lambda e, nid=note.id: self._open_note_read_by_id(nid)
+        header_layout.addWidget(title_label)
 
+        header_layout.addStretch()
+
+        # Кнопка переименования
+        edit_btn = QPushButton("✏️")
+        edit_btn.setFixedSize(24, 24)
+        edit_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #FFC107;
+                border: none;
+                border-radius: 4px;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background-color: #FFB300;
+            }
+        """)
+        edit_btn.setToolTip("Переименовать")
+        edit_btn.clicked.connect(lambda checked=False, nid=note.id, t=title: self._rename_note(nid, t))
+        header_layout.addWidget(edit_btn)
+
+        # Кнопка удаления
+        delete_btn = QPushButton("🗑️")
+        delete_btn.setFixedSize(24, 24)
+        delete_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #F44336;
+                border: none;
+                border-radius: 4px;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background-color: #D32F2F;
+            }
+        """)
+        delete_btn.setToolTip("Удалить")
+        delete_btn.clicked.connect(lambda checked=False, nid=note.id: self._delete_note(nid))
+        header_layout.addWidget(delete_btn)
+
+        layout.addLayout(header_layout)
+
+        # Дата
         if note.updated_at:
-            date_label = QLabel(f"📅 {note.updated_at[:16]}")
+            date_label = QLabel(note.updated_at[:16])
             date_label.setStyleSheet("color: gray; font-size: 10px;")
             layout.addWidget(date_label)
 
-        # Превью текста (первые 100 символов)
+        # Превью текста
         if note.content:
             preview = note.content[:100].replace("\n", " ")
             preview_label = QLabel(preview)
@@ -419,12 +464,10 @@ class TopicView(QWidget):
             preview_label.setWordWrap(True)
             layout.addWidget(preview_label)
 
-        card.mousePressEvent = lambda e, nid=note.id: self._open_note_read_by_id(nid)
-
         return card
 
     def _create_note_card_grid(self, note):
-        """Создаёт карточку заметки для режима плиток."""
+        """Создаёт карточку заметки для режима плиток с кнопками."""
         card = QFrame()
         card.setFrameShape(QFrame.Box)
         card.setStyleSheet("""
@@ -440,24 +483,66 @@ class TopicView(QWidget):
                 border-color: #AAA;
             }
         """)
-        card.setCursor(Qt.PointingHandCursor)
 
         layout = QVBoxLayout(card)
+
+        # Верхняя строка
+        header_layout = QHBoxLayout()
 
         title = note.title if note.title else "Без названия"
         title_label = QLabel(title)
         title_label.setStyleSheet("font-size: 15px; font-weight: bold;")
         title_label.setWordWrap(True)
-        layout.addWidget(title_label)
+        title_label.setCursor(Qt.PointingHandCursor)
+        title_label.mousePressEvent = lambda e, nid=note.id: self._open_note_read_by_id(nid)
+        header_layout.addWidget(title_label)
 
+        header_layout.addStretch()
+
+        # Кнопки
+        edit_btn = QPushButton("✏️")
+        edit_btn.setFixedSize(28, 28)
+        edit_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #FFC107;
+                border: none;
+                border-radius: 4px;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background-color: #FFB300;
+            }
+        """)
+        edit_btn.setToolTip("Переименовать")
+        edit_btn.clicked.connect(lambda checked=False, nid=note.id, t=title: self._rename_note(nid, t))
+        header_layout.addWidget(edit_btn)
+
+        delete_btn = QPushButton("🗑️")
+        delete_btn.setFixedSize(28, 28)
+        delete_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #F44336;
+                border: none;
+                border-radius: 4px;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background-color: #D32F2F;
+            }
+        """)
+        delete_btn.setToolTip("Удалить")
+        delete_btn.clicked.connect(lambda checked=False, nid=note.id: self._delete_note(nid))
+        header_layout.addWidget(delete_btn)
+
+        layout.addLayout(header_layout)
+
+        # Дата
         if note.updated_at:
-            date_label = QLabel(f"📅 {note.updated_at[:16]}")
+            date_label = QLabel(note.updated_at[:16])
             date_label.setStyleSheet("color: gray; font-size: 10px;")
             layout.addWidget(date_label)
 
         layout.addStretch()
-
-        card.mousePressEvent = lambda e, nid=note.id: self._open_note_read_by_id(nid)
 
         return card
 
@@ -516,13 +601,17 @@ class TopicView(QWidget):
 
         menu.exec(self.notes_list.mapToGlobal(pos))
 
-    def _rename_note(self, note_id: int, item: QListWidgetItem):
-        new_title, ok = QInputDialog.getText(self, "Переименовать", "Новое название записи:")
+    def _rename_note(self, note_id: int, old_title: str):
+        """Переименовывает заметку"""
+        new_title, ok = QInputDialog.getText(self, "Переименовать", "Новое название записи:", text=old_title)
         if ok and new_title.strip():
             self.note_controller.update_note(note_id, title=new_title.strip())
             self._load_notes_list()
+            if self.current_note_id == note_id:
+                self._update_read_view()
 
     def _delete_note(self, note_id: int):
+        """Удаляет заметку"""
         reply = QMessageBox.question(
             self, "Удалить запись",
             "Вы уверены, что хотите удалить эту запись?",
@@ -532,8 +621,9 @@ class TopicView(QWidget):
             self.note_controller.delete_note(note_id)
             if self.current_note_id == note_id:
                 self.current_note_id = None
-            self._load_notes_list()
-            self._switch_to_notes_main()
+                self._switch_to_notes_main()
+            else:
+                self._load_notes_list()
 
     def _create_new_note(self):
         """Создаёт новую запись и открывает её в режиме редактирования."""

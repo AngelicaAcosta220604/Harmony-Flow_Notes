@@ -1,17 +1,19 @@
 # views/main_window.py
+
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QStackedWidget, QLabel, QFrame
+    QPushButton, QStackedWidget, QLabel, QFrame, QMessageBox
 )
-from views.topics_view import TopicsView
 from PySide6.QtCore import Qt
-from widgets.tree_widget import TreeWidget
+from widgets.tree_widget import TreeWidget  # ← ИЗМЕНЕНО: вместо TopicsView
+from views.focus_active_view import FocusActiveView
 from controllers.topic_controller import TopicController
 from controllers.note_controller import NoteController
 from controllers.flashcard_controller import FlashcardController
 from controllers.task_controller import TaskController
 from controllers.session_controller import SessionController
 from views.topic_view import TopicView
+from utils.ping_manager import PingManager
 
 
 class MainWindow(QMainWindow):
@@ -71,18 +73,26 @@ class MainWindow(QMainWindow):
         # ================== Правая область (StackedWidget) ==================
         self.stack = QStackedWidget()
 
-        # Страница 1: Главная
+        # Страница 0: Главная
         page_home = QLabel("🏠 Главная страница\n\nДобро пожаловать в HFlow!")
         page_home.setAlignment(Qt.AlignCenter)
         page_home.setStyleSheet("font-size: 20px;")
 
-        # Страница 2: Темы (главная страница со списком тем)
-        self.page_topics = TopicsView(topic_controller=self.topic_controller)
-        self.page_topics.topic_selected.connect(self.on_topic_selected)
+        # Страница 1: Дерево тем (используем TreeWidget)
+        self.tree_widget = TreeWidget(topic_controller=self.topic_controller)
+        self.tree_widget.topic_selected.connect(self.on_topic_selected)
 
-        # Страница 3: Фокус
-        page_focus = QLabel("⏱ Фокус-сессия\n\nЗдесь будет таймер и ползунки")
-        page_focus.setAlignment(Qt.AlignCenter)
+        # Страница 2: Экран выбора темы для сессии
+        self.focus_setup_view = self._create_focus_setup_view()
+
+        # Страница 3: Экран активной сессии
+        self.focus_active_view = FocusActiveView(
+            session_controller=self.session_controller,
+            note_controller=self.note_controller,
+            topic_controller=self.topic_controller
+        )
+        self.focus_active_view.session_ended.connect(self.on_session_ended)
+        self.focus_active_view.back_to_topics.connect(lambda: self.stack.setCurrentIndex(1))
 
         # Страница 4: Задачи
         page_tasks = QLabel("✅ Задачи\n\nСписок задач с дедлайнами")
@@ -98,11 +108,12 @@ class MainWindow(QMainWindow):
 
         # Добавляем страницы
         self.stack.addWidget(page_home)  # индекс 0
-        self.stack.addWidget(self.page_topics)  # индекс 1
-        self.stack.addWidget(page_focus)  # индекс 2
-        self.stack.addWidget(page_tasks)  # индекс 3
-        self.stack.addWidget(page_analytics)  # индекс 4
-        self.stack.addWidget(page_settings)  # индекс 5
+        self.stack.addWidget(self.tree_widget)  # индекс 1 - дерево тем
+        self.stack.addWidget(self.focus_setup_view)  # индекс 2
+        self.stack.addWidget(self.focus_active_view)  # индекс 3
+        self.stack.addWidget(page_tasks)  # индекс 4
+        self.stack.addWidget(page_analytics)  # индекс 5
+        self.stack.addWidget(page_settings)  # индекс 6
 
         # ================== Собираем всё ==================
         main_layout.addWidget(sidebar)
@@ -112,16 +123,70 @@ class MainWindow(QMainWindow):
         btn_home.clicked.connect(lambda: self.stack.setCurrentIndex(0))
         btn_topics.clicked.connect(lambda: self.stack.setCurrentIndex(1))
         btn_focus.clicked.connect(lambda: self.stack.setCurrentIndex(2))
-        btn_tasks.clicked.connect(lambda: self.stack.setCurrentIndex(3))
-        btn_analytics.clicked.connect(lambda: self.stack.setCurrentIndex(4))
-        btn_settings.clicked.connect(lambda: self.stack.setCurrentIndex(5))
+        btn_tasks.clicked.connect(lambda: self.stack.setCurrentIndex(4))
+        btn_analytics.clicked.connect(lambda: self.stack.setCurrentIndex(5))
+        btn_settings.clicked.connect(lambda: self.stack.setCurrentIndex(6))
 
-        # Загружаем реальные темы из БД при старте
-        self.page_topics.load_topics()
+        # ================== Настройка пинга ==================
+        self.ping_manager = PingManager(idle_ms=15 * 60 * 1000)
+        self.session_controller.set_ping_manager(self.ping_manager)
+        self.session_controller.ping_needed.connect(self.show_ping_dialog)
 
-    # ================== МЕТОД ВЫБОРА ТЕМЫ (ПРАВИЛЬНОЕ МЕСТО) ==================
+    # ================== СОЗДАНИЕ ЭКРАНА ВЫБОРА ТЕМЫ ==================
+    def _create_focus_setup_view(self):
+        from PySide6.QtWidgets import QVBoxLayout, QComboBox, QPushButton, QLabel
+
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+
+        layout.addWidget(QLabel("Выберите тему для фокус-сессии:"))
+
+        self.session_topic_combo = QComboBox()
+        self.refresh_topic_combo()
+        layout.addWidget(self.session_topic_combo)
+
+        btn_start = QPushButton("▶ Начать сессию")
+        btn_start.clicked.connect(self.start_session_from_setup)
+        layout.addWidget(btn_start)
+
+        layout.addStretch()
+        return widget
+
+    def refresh_topic_combo(self):
+        self.session_topic_combo.clear()
+        topics = self.topic_controller.get_all_topics()
+        for topic in topics:
+            if topic.type == "topic":
+                self.session_topic_combo.addItem(topic.name, topic.id)
+
+    def start_session_from_setup(self):
+        current_index = self.session_topic_combo.currentIndex()
+        if current_index < 0:
+            QMessageBox.warning(self, "Ошибка", "Сначала создайте хотя бы одну тему!")
+            return
+
+        topic_id = self.session_topic_combo.currentData()
+        topic_name = self.session_topic_combo.currentText()
+
+        self.focus_active_view.start_session(topic_id, topic_name)
+        self.stack.setCurrentWidget(self.focus_active_view)
+
+    def on_session_ended(self, session_id: int):
+        self.stack.setCurrentIndex(2)
+        self.refresh_topic_combo()
+        # Обновляем дерево тем
+        self.tree_widget.load_topics()
+
+    def show_ping_dialog(self):
+        from widgets.ping_dialog import PingDialog
+
+        dialog = PingDialog(self)
+        if dialog.exec():
+            self.session_controller.user_responded_to_ping()
+
+    # ================== ОБРАБОТКА ВЫБОРА ТЕМЫ ==================
     def on_topic_selected(self, topic_id: int):
-        """Обработчик клика по теме в дереве"""
+        """Открывает выбранную тему"""
         topic_view = TopicView(
             topic_id=topic_id,
             topic_controller=self.topic_controller,
@@ -130,7 +195,6 @@ class MainWindow(QMainWindow):
             task_controller=self.task_controller,
             session_controller=self.session_controller
         )
-        # Подключаем сигнал возврата к переключению на страницу с деревом тем (индекс 1)
         topic_view.back_requested.connect(lambda: self.stack.setCurrentIndex(1))
         self.stack.addWidget(topic_view)
         self.stack.setCurrentWidget(topic_view)
