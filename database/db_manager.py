@@ -53,16 +53,19 @@ class DatabaseManager:
             """)
 
             # flashcards (карточки)
+            # flashcards (карточки)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS flashcards (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     topic_id INTEGER NOT NULL,
+                    source_note_id INTEGER,
                     type TEXT DEFAULT 'free',
                     question TEXT,
                     answer TEXT,
                     content TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (topic_id) REFERENCES topics (id)
+                    FOREIGN KEY (topic_id) REFERENCES topics (id),
+                    FOREIGN KEY (source_note_id) REFERENCES notes (id)
                 )
             """)
 
@@ -129,6 +132,15 @@ class DatabaseManager:
                     setting_value TEXT NOT NULL
                 )
             """)
+
+            # database/db_manager.py
+            # В методе _init_tables() после создания всех таблиц добавьте:
+
+            try:
+                cursor.execute("ALTER TABLE flashcards ADD COLUMN source_note_id INTEGER")
+                cursor.execute("ALTER TABLE flashcards ADD COLUMN source_note_id REFERENCES notes(id)")
+            except:
+                pass  # колонка уже существует
 
             # Добавляем настройки по умолчанию, если их нет
             default_settings = [

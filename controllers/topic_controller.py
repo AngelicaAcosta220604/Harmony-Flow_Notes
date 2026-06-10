@@ -65,3 +65,12 @@ class TopicController:
     def get_topic_tree(self) -> List[Topic]:
         """Возвращает все темы, отсортированные для построения дерева."""
         return self.get_all_topics()
+
+
+def move_topic(self, topic_id: int, new_parent_id: Optional[int]) -> None:
+    print(f"DEBUG move_topic: topic {topic_id} -> parent {new_parent_id}")  # ДОБАВИТЬ
+    db.execute(
+        "UPDATE topics SET parent_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        (new_parent_id, topic_id)
+    )
+    print(f"DEBUG move_topic: SQL выполнен")  # ДОБАВИТЬ
