@@ -7,6 +7,7 @@ from controllers.note_controller import NoteController
 from controllers.flashcard_controller import FlashcardController
 from controllers.task_controller import TaskController
 from controllers.session_controller import SessionController
+
 import os
 print("Текущая папка:", os.getcwd())
 print("Файлы .db:", [f for f in os.listdir('.') if f.endswith('.db')])
