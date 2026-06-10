@@ -50,5 +50,15 @@ class FlashcardController:
         )
         return [Flashcard.from_row(row) for row in rows]
 
+    def update_card(self, card_id: int, content: str = None, question: str = None, answer: str = None):
+            """Обновляет карточку."""
+            if content is not None:
+                db.execute("UPDATE flashcards SET content = ? WHERE id = ?", (content, card_id))
+            elif question is not None and answer is not None:
+                db.execute("UPDATE flashcards SET question = ?, answer = ? WHERE id = ?", (question, answer, card_id))
+
     def delete_card(self, card_id: int):
-        db.execute("DELETE FROM flashcards WHERE id = ?", (card_id,))
+            """Удаляет карточку."""
+            db.execute("DELETE FROM flashcards WHERE id = ?", (card_id,))
+
+
