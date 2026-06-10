@@ -8,7 +8,7 @@ from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QComboBox, QGridLayout, QScrollArea
 from views.note_editor_view import NoteEditorView
-
+from views.flashcards_view import FlashcardsView
 class TopicView(QWidget):
     back_requested = Signal()  # возврат к списку тем
 
@@ -120,9 +120,11 @@ class TopicView(QWidget):
         # ---------------------------------------------------------
         # Карточки, Задачи, Сессии, Аналитика (пока заглушки)
         # ---------------------------------------------------------
-        cards_widget = QLabel("🃏 Здесь будут карточки\n\nСкоро появится функционал создания карточек из заметок")
-        cards_widget.setAlignment(Qt.AlignCenter)
-        self.stack.addWidget(cards_widget)  # индекс 3
+        self.flashcards_view = FlashcardsView(
+            flashcard_controller=flashcard_controller,
+            topic_id=topic_id
+        )
+        self.stack.addWidget(self.flashcards_view)  # индекс 3
 
         tasks_widget = QLabel("✅ Здесь будут задачи\n\nСписок задач с дедлайнами появится позже")
         tasks_widget.setAlignment(Qt.AlignCenter)
@@ -210,8 +212,9 @@ class TopicView(QWidget):
         page = QWidget()
         layout = QVBoxLayout(page)
 
-        # Верхняя панель: кнопка "Назад к записям" + кнопка "Редактировать"
+        # Верхняя панель
         top_bar = QHBoxLayout()
+
         self.back_to_notes_btn = QPushButton("← Назад к записям")
         self.back_to_notes_btn.clicked.connect(lambda: self._switch_to_notes_main())
         top_bar.addWidget(self.back_to_notes_btn)
@@ -239,6 +242,8 @@ class TopicView(QWidget):
         layout.addStretch()
 
         return page
+
+
 
     def _create_edit_view_page(self) -> QWidget:
         """Страница редактирования записи (режим редактирования)."""
@@ -650,3 +655,4 @@ class TopicView(QWidget):
         self.edit_view_page.load_note(note_id, self.topic_id)
         self._load_notes_list()
         self.stack.setCurrentIndex(2)
+
