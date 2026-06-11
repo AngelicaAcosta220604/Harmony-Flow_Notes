@@ -656,8 +656,15 @@ class TopicView(QWidget):
     def _create_new_note(self):
         """Создаёт новую запись и открывает её в режиме редактирования."""
         title, ok = QInputDialog.getText(self, "Новая запись", "Введите название записи:")
-        if not ok or not title.strip():
-            title = "Новая запись"
+
+        # ЕСЛИ ПОЛЬЗОВАТЕЛЬ НАЖАЛ "ОТМЕНА" - НИЧЕГО НЕ ДЕЛАЕМ
+        if not ok:
+            return
+
+        # Если название пустое - предупреждаем
+        if not title.strip():
+            QMessageBox.warning(self, "Ошибка", "Название записи не может быть пустым!")
+            return
 
         # Создаём заметку через контроллер
         note_id = self.note_controller.create_note(self.topic_id, title.strip(), "")

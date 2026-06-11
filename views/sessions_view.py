@@ -178,23 +178,23 @@ class SessionsView(QWidget):
 
         info_layout.addStretch()
 
-        analytics_btn = QPushButton("📊 Аналитика сессии")
-        analytics_btn.setFixedSize(130, 26)
-        analytics_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #2196F3;
-                color: white;
-                border: none;
-                border-radius: 4px;
-                font-size: 11px;
-            }
-            QPushButton:hover {
-                background-color: #0b7dda;
-            }
-        """)
+        # analytics_btn = QPushButton("📊 Аналитика сессии")
+        # analytics_btn.setFixedSize(130, 26)
+        # analytics_btn.setStyleSheet("""
+        #     QPushButton {
+        #         background-color: #2196F3;
+        #         color: white;
+        #         border: none;
+        #         border-radius: 4px;
+        #         font-size: 11px;
+        #     }
+        #     QPushButton:hover {
+        #         background-color: #0b7dda;
+        #     }
+        # """)
         # Вызываем сигнал, который будет обработан в TopicView
-        analytics_btn.clicked.connect(lambda checked, sid=session.id: self._on_analytics_clicked(sid))
-        info_layout.addWidget(analytics_btn)
+        # analytics_btn.clicked.connect(lambda checked, sid=session.id: self._on_analytics_clicked(sid))
+        # info_layout.addWidget(analytics_btn)
 
         delete_btn = QPushButton("🗑️ Удалить")
         delete_btn.setFixedSize(80, 26)
@@ -237,14 +237,14 @@ class SessionsView(QWidget):
 
         return card_frame
 
-    def _on_analytics_clicked(self, session_id: int):
-        """Отправляет сигнал родительскому окну для показа аналитики"""
-        # Находим родительский TopicView
-        parent = self.parent()
-        while parent and not hasattr(parent, 'show_session_analytics_from_session'):
-            parent = parent.parent()
-        if parent and hasattr(parent, 'show_session_analytics_from_session'):
-            parent.show_session_analytics_from_session(session_id)
+    # def _on_analytics_clicked(self, session_id: int):
+    #     """Отправляет сигнал родительскому окну для показа аналитики"""
+    #     # Находим родительский TopicView
+    #     parent = self.parent()
+    #     while parent and not hasattr(parent, 'show_session_analytics_from_session'):
+    #         parent = parent.parent()
+    #     if parent and hasattr(parent, 'show_session_analytics_from_session'):
+    #         parent.show_session_analytics_from_session(session_id)
 
     def _create_note_widget(self, note):
         note_frame = QFrame()
