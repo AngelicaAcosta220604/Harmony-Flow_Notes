@@ -61,4 +61,7 @@ class FlashcardController:
             """Удаляет карточку."""
             db.execute("DELETE FROM flashcards WHERE id = ?", (card_id,))
 
-
+    def get_all_cards(self) -> list:
+        """Возвращает все карточки из всех тем (для глобального просмотра)"""
+        rows = db.fetchall("SELECT * FROM flashcards ORDER BY created_at DESC")
+        return [Flashcard.from_row(row) for row in rows]
