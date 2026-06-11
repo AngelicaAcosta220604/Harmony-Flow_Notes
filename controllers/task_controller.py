@@ -48,3 +48,24 @@ class TaskController:
 
     def delete_task(self, task_id: int):
         db.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+
+    def get_tasks_for_date(self, topic_id: int, date_str: str) -> list:
+            """Возвращает задачи на конкретную дату."""
+            rows = db.fetchall(
+                """
+                SELECT * FROM tasks 
+                WHERE topic_id = ? AND DATE(deadline) = ?
+                ORDER BY deadline ASC
+                """,
+                (topic_id, date_str)
+            )
+            return [Task.from_row(row) for row in rows]
+
+    def update_task(self, task_id: int, title: str = None, description: str = None, deadline: str = None):
+            """Обновляет задачу."""
+            if title is not None:
+                db.execute("UPDATE tasks SET title = ? WHERE id = ?", (title, task_id))
+            if description is not None:
+                db.execute("UPDATE tasks SET description = ? WHERE id = ?", (description, task_id))
+            if deadline is not None:
+                db.execute("UPDATE tasks SET deadline = ? WHERE id = ?", (deadline, task_id))
