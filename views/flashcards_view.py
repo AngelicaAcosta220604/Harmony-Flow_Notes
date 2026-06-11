@@ -5,17 +5,19 @@ from PySide6.QtWidgets import (
     QLabel, QScrollArea, QFrame, QMessageBox, QComboBox
 )
 from PySide6.QtCore import Qt, Signal
-from widgets.card_type_dialog import CardTypeDialog
 
+from controllers import topic_controller
+from widgets.card_type_dialog import CardTypeDialog
 
 class FlashcardsView(QWidget):
     """Виджет для отображения и управления карточками темы."""
 
     cards_updated = Signal()
 
-    def __init__(self, flashcard_controller, topic_id: int, parent=None):
+    def __init__(self, flashcard_controller, topic_controller, topic_id: int = None, parent=None):
         super().__init__(parent)
         self.flashcard_controller = flashcard_controller
+        self.topic_controller = topic_controller  # сохраняем
         self.topic_id = topic_id
 
         self.current_cards = []
@@ -81,7 +83,12 @@ class FlashcardsView(QWidget):
 
     def load_cards(self):
         """Загружает карточки из БД."""
-        self.current_cards = self.flashcard_controller.get_cards_by_topic(self.topic_id)
+        if self.topic_id is None:
+            # Глобальный режим: все карточки из всех тем
+            self.current_cards = self.flashcard_controller.get_all_cards()
+        else:
+            # Режим конкретной темы
+            self.current_cards = self.flashcard_controller.get_cards_by_topic(self.topic_id)
         self.display_cards()
 
     def display_cards(self):
@@ -208,29 +215,109 @@ class FlashcardsView(QWidget):
             if dialog.card_type == "free":
                 content = dialog.get_free_content()
                 if content:
-                    self.flashcard_controller.create_free_card(
-                        topic_id=self.topic_id,
-                        content=content,
-                        source_note_id=None
-                    )
-                    QMessageBox.information(self, "Готово", "Свободная карточка создана!")
-                    self.load_cards()
+                    # Определяем тему для карточки
+                    if self.topic_id is None:
+                        # Глобальный режим: нужно выбрать тему
+                        from widgets.topic_selector_dialog import TopicSelectorDialog
+                        topic_dialog = TopicSelectorDialog(self.topic_controller, self)
+                        if topic_dialog.exec():
+                            selected_topic_id = topic_dialog.get_selected_topic_id()
+                            if selected_topic_id:
+                                self.flashcard_controller.create_free_card(
+                                    topic_id=selected_topic_id,
+                                    content=content,
+                                    source_note_id=None
+                                )
+                                QMessageBox.information(self, "Готово", "Свободная карточка создана!")
+                                self.load_cards()
+                            else:
+                                return
+                        else:
+                            return
+                    else:
+                        # Режим конкретной темы
+                        self.flashcard_controller.create_free_card(
+                            topic_id=self.topic_id,
+                            content=content,
+                            source_note_id=None
+                        )
+                        QMessageBox.information(self, "Готово", "Свободная карточка создана!")
+                        self.load_cards()
                 else:
                     QMessageBox.warning(self, "Ошибка", "Содержание не может быть пустым")
-            else:  # qa
+
+            else:  # qa (вопрос-ответ)
                 question = dialog.get_question()
                 answer = dialog.get_answer()
                 if question and answer:
-                    self.flashcard_controller.create_qa_card(
-                        topic_id=self.topic_id,
-                        question=question,
-                        answer=answer,
-                        source_note_id=None
+                    # Определяем тему для карточки
+                    if self.topic_id is None:
+                        # Глобальный режим: нужно выбрать тему
+                        from widgets.topic_selector_dialog import TopicSelectorDialog
+                        topic_dialog = TopicSelectorDialog(self.topic_controller, self)
+                        if topic_dialog.exec():
+                            selected_topic_id = topic_dialog.get_selected_topic_id()
+                            if selected_topic_id:
+                                self.flashcard_controller.create_qa_card(
+                                    topic_id=selected_topic_id,
+                                    question=question,
+                                    answer=answer,
+                                    source_note_id=None
+                                )
+                                QMessageBox.information(self, "Готово", "Карточка Вопрос-Ответ создана!")
+                                self.load_cards()
+                            else:
+                                return
+                        else:
+                            return
+                    else:
+                        # Режим конкретной темы
+                        self.flashcard_controller.create_qa_card(
+                            topic_id=self.topic_id,
+                            question=question,
+                            answer=answer,
+                            source_note_id=None
+                        )
+                        QMessageBox.information(self, "Готово", "Карточка Вопрос-Ответ создана!")
+                        self.load_cards()
+                elif question and not answer:
+                    # Нет ответа — спрашиваем пользователя
+                    reply = QMessageBox.question(
+                        self,
+                        "Нет ответа",
+                        "Вы не заполнили ответ.\n\n"
+                        "• Нажмите «Да» — чтобы сохранить как свободную карточку\n"
+                        "• Нажмите «Нет» — чтобы продолжить редактирование",
+                        QMessageBox.Yes | QMessageBox.No,
+                        QMessageBox.No
                     )
-                    QMessageBox.information(self, "Готово", "Карточка Вопрос-Ответ создана!")
-                    self.load_cards()
+                    if reply == QMessageBox.Yes:
+                        # Сохраняем вопрос как свободную карточку
+                        content = question
+                        if self.topic_id is None:
+                            from widgets.topic_selector_dialog import TopicSelectorDialog
+                            topic_dialog = TopicSelectorDialog(self.topic_controller, self)
+                            if topic_dialog.exec():
+                                selected_topic_id = topic_dialog.get_selected_topic_id()
+                                if selected_topic_id:
+                                    self.flashcard_controller.create_free_card(
+                                        topic_id=selected_topic_id,
+                                        content=content,
+                                        source_note_id=None
+                                    )
+                                    QMessageBox.information(self, "Готово", "Карточка сохранена как свободная!")
+                                    self.load_cards()
+                        else:
+                            self.flashcard_controller.create_free_card(
+                                topic_id=self.topic_id,
+                                content=content,
+                                source_note_id=None
+                            )
+                            QMessageBox.information(self, "Готово", "Карточка сохранена как свободная!")
+                            self.load_cards()
+                    # Если reply == QMessageBox.No — ничего не делаем, диалог остаётся открытым
                 else:
-                    QMessageBox.warning(self, "Ошибка", "Заполните и вопрос, и ответ")
+                    QMessageBox.warning(self, "Ошибка", "Заполните хотя бы вопрос")
 
     def edit_card(self, card_id: int):
         """Редактирование существующей карточки."""
@@ -278,3 +365,4 @@ class FlashcardsView(QWidget):
     def refresh(self):
         """Обновляет список карточек."""
         self.load_cards()
+

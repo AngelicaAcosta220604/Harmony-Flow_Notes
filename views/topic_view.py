@@ -18,9 +18,8 @@ class TopicView(QWidget):
     start_session_requested = Signal(int, str)  # topic_id, topic_name
     show_session_analytics = Signal(int)  # session_id
 
-    def __init__(self, topic_id: int, topic_controller, note_controller,
-                 flashcard_controller, task_controller, session_controller,
-                 parent=None):
+    def __init__(self, topic_id, topic_controller, note_controller,
+                 flashcard_controller, task_controller, session_controller, parent=None):
         super().__init__(parent)
         self.topic_id = topic_id
         self.topic_controller = topic_controller
@@ -127,8 +126,9 @@ class TopicView(QWidget):
         # Карточки, Задачи, Сессии, Аналитика (пока заглушки)
         # ---------------------------------------------------------
         self.flashcards_view = FlashcardsView(
-            flashcard_controller=flashcard_controller,
-            topic_id=topic_id
+            flashcard_controller=self.flashcard_controller,
+            topic_controller=self.topic_controller,  # <-- ДОБАВИТЬ
+            topic_id=self.topic_id
         )
         self.stack.addWidget(self.flashcards_view)  # индекс 3
 

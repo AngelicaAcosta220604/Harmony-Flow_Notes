@@ -5,6 +5,8 @@ from PySide6.QtWidgets import (
     QPushButton, QStackedWidget, QLabel, QFrame, QMessageBox
 )
 from PySide6.QtCore import Qt
+
+from views.flashcards_view import FlashcardsView
 from widgets.tree_widget import TreeWidget  # ← ИЗМЕНЕНО: вместо TopicsView
 from views.focus_active_view import FocusActiveView
 from controllers.topic_controller import TopicController
@@ -49,6 +51,7 @@ class MainWindow(QMainWindow):
         btn_topics = QPushButton("📚 Темы")
         btn_focus = QPushButton("⏱ Фокус")
         btn_tasks = QPushButton("✅ Задачи")
+        btn_cards = QPushButton("🃏 Карточки")  # <-- НОВАЯ КНОПКА
         btn_analytics = QPushButton("📊 Аналитика")
         btn_settings = QPushButton("⚙ Настройки")
 
@@ -64,7 +67,7 @@ class MainWindow(QMainWindow):
                 background-color: #34495E;
             }
         """
-        for btn in [btn_home, btn_topics, btn_focus, btn_tasks, btn_analytics, btn_settings]:
+        for btn in [btn_home, btn_topics, btn_focus, btn_tasks, btn_cards, btn_analytics, btn_settings]:
             btn.setStyleSheet(btn_style)
             sidebar_layout.addWidget(btn)
 
@@ -98,22 +101,36 @@ class MainWindow(QMainWindow):
         page_tasks = QLabel("✅ Задачи\n\nСписок задач с дедлайнами")
         page_tasks.setAlignment(Qt.AlignCenter)
 
-        # Страница 5: Аналитика
+        # <-- НОВАЯ СТРАНИЦА 5: Глобальные карточки -->
+        self.global_cards_view = FlashcardsView(
+            flashcard_controller=self.flashcard_controller,
+            topic_controller=self.topic_controller,  # <-- ДОБАВИТЬ
+            topic_id=None  # None = глобальный режим (все карточки)
+        )
+        # Временно обернём в QWidget с лейблом, пока не доработаем FlashcardsView
+        cards_container = QWidget()
+        cards_layout = QVBoxLayout(cards_container)
+        cards_layout.addWidget(QLabel("🃏 Все карточки\n\nЗдесь будут карточки из всех тем"))
+        cards_layout.addWidget(self.global_cards_view)
+        cards_layout.addStretch()
+
+        # Страница 6: Аналитика
         page_analytics = QLabel("📊 Аналитика\n\nГрафики и статистика")
         page_analytics.setAlignment(Qt.AlignCenter)
 
-        # Страница 6: Настройки
+        # Страница 7: Настройки
         page_settings = QLabel("⚙ Настройки\n\nПараметры приложения")
         page_settings.setAlignment(Qt.AlignCenter)
 
         # Добавляем страницы
         self.stack.addWidget(page_home)  # индекс 0
-        self.stack.addWidget(self.tree_widget)  # индекс 1 - дерево тем
+        self.stack.addWidget(self.tree_widget)  # индекс 1
         self.stack.addWidget(self.focus_setup_view)  # индекс 2
         self.stack.addWidget(self.focus_active_view)  # индекс 3
         self.stack.addWidget(page_tasks)  # индекс 4
-        self.stack.addWidget(page_analytics)  # индекс 5
-        self.stack.addWidget(page_settings)  # индекс 6
+        self.stack.addWidget(cards_container)  # индекс 5 <-- НОВАЯ СТРАНИЦА
+        self.stack.addWidget(page_analytics)  # индекс 6
+        self.stack.addWidget(page_settings)  # индекс 7
 
         # ================== Собираем всё ==================
         main_layout.addWidget(sidebar)
@@ -124,8 +141,9 @@ class MainWindow(QMainWindow):
         btn_topics.clicked.connect(lambda: self.stack.setCurrentIndex(1))
         btn_focus.clicked.connect(lambda: self.stack.setCurrentIndex(2))
         btn_tasks.clicked.connect(lambda: self.stack.setCurrentIndex(4))
-        btn_analytics.clicked.connect(lambda: self.stack.setCurrentIndex(5))
-        btn_settings.clicked.connect(lambda: self.stack.setCurrentIndex(6))
+        btn_cards.clicked.connect(lambda: self.stack.setCurrentIndex(5))  # <-- НОВАЯ
+        btn_analytics.clicked.connect(lambda: self.stack.setCurrentIndex(6))
+        btn_settings.clicked.connect(lambda: self.stack.setCurrentIndex(7))
 
         # ================== Настройка пинга ==================
         self.ping_manager = PingManager(idle_ms=15 * 60 * 1000)
