@@ -11,7 +11,8 @@ from views.note_editor_view import NoteEditorView
 from views.flashcards_view import FlashcardsView
 from views.tasks_view import TasksView
 from views.sessions_view import SessionsView
-
+from views.analytics_view import AnalyticsView
+from controllers.topic_analytics_controller import TopicAnalyticsController
 
 class TopicView(QWidget):
     back_requested = Signal()  # возврат к списку тем
@@ -144,14 +145,18 @@ class TopicView(QWidget):
             topic_name=self.topic.name,
             parent=self  # ← parent=self вместо topic_view=self
         )
-        self.sessions_view.start_session_requested.connect(self._start_new_session)
-        self.stack.addWidget(self.sessions_view)  # индекс 5
+        # Создаём контроллер аналитики для этой темы
+        self.topic_analytics = TopicAnalyticsController(topic_id)
 
-        analytics_widget = QLabel("📊 Здесь будет аналитика\n\nГрафики и статистика появятся позже")
-        analytics_widget.setAlignment(Qt.AlignCenter)
-        self.stack.addWidget(analytics_widget)  # индекс 6
+        # Создаём виджет аналитики
+        from views.analytics_view import AnalyticsView
+        self.analytics_view = AnalyticsView(
+            analytics_controller=self.topic_analytics,
+            is_topic_view=True
+        )
+        self.stack.addWidget(self.analytics_view)  # индекс 6
 
-        # Подключаем кнопки меню
+        # Подключаем кнопки меню (проверьте индексы!)
         self.btn_notes.clicked.connect(lambda: self._switch_to_notes_main())
         self.btn_cards.clicked.connect(lambda: self.stack.setCurrentIndex(3))
         self.btn_tasks.clicked.connect(lambda: self.stack.setCurrentIndex(4))
@@ -160,7 +165,7 @@ class TopicView(QWidget):
 
         # Инициализация
         self.current_note_id = None
-        self.all_notes = []  # для поиска
+        self.all_notes = []
         self._load_notes_list()
 
     # ==================== СОЗДАНИЕ СТРАНИЦ ====================
@@ -656,10 +661,12 @@ class TopicView(QWidget):
     def _create_new_note(self):
         """Создаёт новую запись и открывает её в режиме редактирования."""
         title, ok = QInputDialog.getText(self, "Новая запись", "Введите название записи:")
-        if not ok or not title.strip():
-            title = "Новая запись"
 
-        # Создаём заметку через контроллер
+        # ЕСЛИ ПОЛЬЗОВАТЕЛЬ НАЖАЛ CANCEL ИЛИ НЕ ВВЁЛ НАЗВАНИЕ — НЕ СОЗДАЁМ
+        if not ok or not title.strip():
+            return  # ← ВЫХОДИМ, НИЧЕГО НЕ СОЗДАЁМ
+
+        # Создаём заметку только если название введено
         note_id = self.note_controller.create_note(self.topic_id, title.strip(), "")
         self.current_note_id = note_id
 
@@ -681,8 +688,8 @@ class TopicView(QWidget):
 
     def show_session_analytics_from_session(self, session_id: int):
         """Показывает аналитику по сессии (вызывается из SessionsView)"""
-        # Переключаемся на вкладку аналитики (индекс 6)
+        # Переключаемся на вкладку аналитики
         self.stack.setCurrentIndex(6)
-        # Временно показываем сообщение
-        analytics_widget = self.stack.widget(6)
-        analytics_widget.setText(f"📊 Аналитика сессии #{session_id}\n\nЗдесь будут графики и статистика")
+        # Вызываем метод загрузки аналитики по сессии
+        if hasattr(self.analytics_view, 'load_session_analytics'):
+            self.analytics_view.load_session_analytics(session_id)
