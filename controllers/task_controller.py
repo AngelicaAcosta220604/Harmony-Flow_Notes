@@ -1,18 +1,4 @@
 # controllers/task_controller.py
-"""
-TaskController — контроллер для работы с задачами.
-
-Реализует:
-- создание задачи
-- получение задач (по теме и всех)
-- обновление
-- изменение статуса
-- определение просроченных задач
-- удаление
-- создание задачи из текста (заглушка для UI)
-"""
-
-# controllers/task_controller.py
 
 from database.db_manager import db
 from models.task import Task
@@ -22,7 +8,6 @@ from datetime import datetime
 class TaskController:
 
     def create_task(self, title: str, description: str = "", topic_id: int = None, deadline: str = None) -> int:
-        """Создаёт задачу"""
         now = datetime.now().isoformat()
         return db.execute(
             "INSERT INTO tasks (title, description, topic_id, deadline, status, created_at) VALUES (?, ?, ?, ?, ?, ?)",
@@ -50,22 +35,20 @@ class TaskController:
         db.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
 
     def get_tasks_for_date(self, topic_id: int, date_str: str) -> list:
-            """Возвращает задачи на конкретную дату."""
-            rows = db.fetchall(
-                """
-                SELECT * FROM tasks 
-                WHERE topic_id = ? AND DATE(deadline) = ?
-                ORDER BY deadline ASC
-                """,
-                (topic_id, date_str)
-            )
-            return [Task.from_row(row) for row in rows]
+        rows = db.fetchall(
+            """
+            SELECT * FROM tasks 
+            WHERE topic_id = ? AND DATE(deadline) = ?
+            ORDER BY deadline ASC
+            """,
+            (topic_id, date_str)
+        )
+        return [Task.from_row(row) for row in rows]
 
     def update_task(self, task_id: int, title: str = None, description: str = None, deadline: str = None):
-            """Обновляет задачу."""
-            if title is not None:
-                db.execute("UPDATE tasks SET title = ? WHERE id = ?", (title, task_id))
-            if description is not None:
-                db.execute("UPDATE tasks SET description = ? WHERE id = ?", (description, task_id))
-            if deadline is not None:
-                db.execute("UPDATE tasks SET deadline = ? WHERE id = ?", (deadline, task_id))
+        if title is not None:
+            db.execute("UPDATE tasks SET title = ? WHERE id = ?", (title, task_id))
+        if description is not None:
+            db.execute("UPDATE tasks SET description = ? WHERE id = ?", (description, task_id))
+        if deadline is not None:
+            db.execute("UPDATE tasks SET deadline = ? WHERE id = ?", (deadline, task_id))
