@@ -1,5 +1,3 @@
-# controllers/task_controller.py
-
 from database.db_manager import db
 from models.task import Task
 from datetime import datetime

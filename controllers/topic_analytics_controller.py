@@ -30,7 +30,7 @@ class TopicAnalyticsController(AnalyticsController):
         return [Task.from_row(row) for row in rows]
 
     def get_topic_stats(self) -> dict:
-        """Статистика по теме (использует родительские методы с отфильтрованными данными)"""
+        """Статистика по теме (использует родительские методы)"""
         sessions = self.get_topic_sessions()
         return self.get_session_stats(sessions)
 
