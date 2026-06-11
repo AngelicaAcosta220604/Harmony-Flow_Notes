@@ -2,11 +2,10 @@
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-    QLabel, QScrollArea, QFrame, QMessageBox, QComboBox
+    QLabel, QScrollArea, QFrame, QMessageBox, QComboBox, QDialog
 )
 from PySide6.QtCore import Qt, Signal
 
-from controllers import topic_controller
 from widgets.card_type_dialog import CardTypeDialog
 
 class FlashcardsView(QWidget):
@@ -119,7 +118,7 @@ class FlashcardsView(QWidget):
             self.cards_layout.addWidget(card_widget)
 
     def _create_card_widget(self, card):
-        """Создаёт виджет для одной карточки (без текстового типа, только иконка)."""
+        """Создаёт виджет для одной карточки с возможностью раскрытия ответа."""
         card_frame = QFrame()
         card_frame.setFrameShape(QFrame.Box)
         card_frame.setStyleSheet("""
@@ -132,33 +131,47 @@ class FlashcardsView(QWidget):
             }
             QFrame:hover {
                 background-color: #F9F9F9;
+                border-color: #AAA;
             }
         """)
 
         layout = QVBoxLayout(card_frame)
 
-        # ========== Верхняя строка: иконка + кнопки ==========
+        # ========== Верхняя строка: иконка + тип + кнопки ==========
         header_layout = QHBoxLayout()
 
-        # Иконка вместо текстового типа
+        # Иконка и тип
         if card.type == "free":
             icon_label = QLabel("📝")
-            icon_label.setStyleSheet("font-size: 18px;")
-            content_preview = card.content[:100] + "..." if len(card.content or "") > 100 else card.content
+            type_label = QLabel("Свободная")
+            type_label.setStyleSheet("color: #666; font-size: 11px;")
         else:
             icon_label = QLabel("❓")
-            icon_label.setStyleSheet("font-size: 18px;")
-            content_preview = card.question[:100] + "..." if len(card.question or "") > 100 else card.question
+            type_label = QLabel("Вопрос-Ответ")
+            type_label.setStyleSheet("color: #666; font-size: 11px;")
 
+        icon_label.setStyleSheet("font-size: 18px;")
         header_layout.addWidget(icon_label)
-        header_layout.addSpacing(5)
+        header_layout.addWidget(type_label)
 
-        # Превью содержимого
-        preview_label = QLabel(content_preview or "Нет содержимого")
-        preview_label.setWordWrap(True)
-        preview_label.setStyleSheet("color: #333; font-size: 13px;")
-        preview_label.setMinimumWidth(200)
-        header_layout.addWidget(preview_label, stretch=1)
+        header_layout.addStretch()
+
+        # Кнопка открытия (глазик)
+        open_btn = QPushButton("👁️")
+        open_btn.setFixedSize(28, 28)
+        open_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2196F3;
+                border: none;
+                border-radius: 4px;
+                font-size: 12px;
+                color: white;
+            }
+            QPushButton:hover { background-color: #1976D2; }
+        """)
+        open_btn.setToolTip("Открыть")
+        open_btn.clicked.connect(lambda checked=False, cid=card.id: self._open_card_dialog(cid))
+        header_layout.addWidget(open_btn)
 
         # Кнопка редактирования
         edit_btn = QPushButton("✏️")
@@ -185,6 +198,7 @@ class FlashcardsView(QWidget):
                 border: none;
                 border-radius: 4px;
                 font-size: 12px;
+                color: white;
             }
             QPushButton:hover { background-color: #D32F2F; }
         """)
@@ -193,6 +207,59 @@ class FlashcardsView(QWidget):
         header_layout.addWidget(delete_btn)
 
         layout.addLayout(header_layout)
+
+        # ========== Содержимое карточки ==========
+        if card.type == "free":
+            # Свободная карточка - показываем содержимое
+            content_preview = card.content[:150] + "..." if len(card.content or "") > 150 else card.content
+            content_label = QLabel(content_preview or "Нет содержимого")
+            content_label.setWordWrap(True)
+            content_label.setStyleSheet("font-size: 13px; margin-top: 8px;")
+            layout.addWidget(content_label)
+
+        else:  # question_answer
+            # Вопрос-Ответ: показываем вопрос, ответ скрыт
+            question_text = card.question[:100] + "..." if len(card.question or "") > 100 else card.question
+            question_label = QLabel(f"<b>Вопрос:</b> {question_text}")
+            question_label.setWordWrap(True)
+            question_label.setStyleSheet("font-size: 13px; margin-top: 8px;")
+            layout.addWidget(question_label)
+
+            # Кнопка показа ответа
+            self.answer_buttons = {}  # словарь для хранения кнопок и виджетов ответа
+            show_answer_btn = QPushButton("📖 Показать ответ")
+            show_answer_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #E0E0E0;
+                    border: none;
+                    border-radius: 4px;
+                    padding: 4px 8px;
+                    font-size: 11px;
+                    margin-top: 5px;
+                    text-align: left;
+                }
+                QPushButton:hover { background-color: #CCCCCC; }
+            """)
+
+            # Создаём скрытый виджет для ответа
+            answer_widget = QWidget()
+            answer_widget.setVisible(False)
+            answer_layout = QVBoxLayout(answer_widget)
+            answer_layout.setContentsMargins(10, 5, 0, 5)
+
+            answer_preview = card.answer[:100] + "..." if len(card.answer or "") > 100 else card.answer
+            answer_label = QLabel(f"<b>Ответ:</b> {answer_preview}")
+            answer_label.setWordWrap(True)
+            answer_label.setStyleSheet(
+                "font-size: 12px; color: #2E7D32; background-color: #F1F8E9; padding: 5px; border-radius: 4px;")
+            answer_layout.addWidget(answer_label)
+
+            # Сохраняем ссылки для переключения
+            show_answer_btn.clicked.connect(
+                lambda checked=False, aw=answer_widget, btn=show_answer_btn: self._toggle_answer(aw, btn))
+
+            layout.addWidget(show_answer_btn)
+            layout.addWidget(answer_widget)
 
         # ========== Дата ==========
         date_str = ""
@@ -205,6 +272,9 @@ class FlashcardsView(QWidget):
             date_label = QLabel(date_str)
             date_label.setStyleSheet("color: gray; font-size: 10px; margin-top: 5px;")
             layout.addWidget(date_label)
+
+        # Двойной клик для открытия
+        card_frame.mouseDoubleClickEvent = lambda e, cid=card.id: self._open_card_dialog(cid)
 
         return card_frame
 
@@ -366,3 +436,170 @@ class FlashcardsView(QWidget):
         """Обновляет список карточек."""
         self.load_cards()
 
+    def _toggle_answer(self, answer_widget, button):
+        """Переключает видимость ответа и меняет текст кнопки."""
+        if answer_widget.isVisible():
+            answer_widget.setVisible(False)
+            button.setText("📖 Показать ответ")
+        else:
+            answer_widget.setVisible(True)
+            button.setText("📖 Скрыть ответ")
+
+    def _open_card_dialog(self, card_id: int):
+        """Открывает модальное окно с полным содержимым карточки."""
+        # Находим карточку
+        card = None
+        for c in self.current_cards:
+            if c.id == card_id:
+                card = c
+                break
+
+        if not card:
+            return
+
+        # Создаём модальное окно
+        from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QScrollArea
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"Карточка #{card_id}")
+        dialog.setMinimumSize(550, 450)
+        dialog.setModal(True)
+
+        layout = QVBoxLayout(dialog)
+
+        # Заголовок с типом
+        if card.type == "free":
+            title_label = QLabel("📝 Свободная карточка")
+            title_label.setStyleSheet("font-size: 16px; font-weight: bold;")
+            layout.addWidget(title_label)
+
+            # Содержимое с прокруткой
+            scroll = QScrollArea()
+            scroll.setWidgetResizable(True)
+            scroll.setStyleSheet("QScrollArea { border: none; }")
+
+            content_widget = QWidget()
+            content_layout = QVBoxLayout(content_widget)
+
+            content_label = QLabel(card.content or "Нет содержимого")
+            content_label.setWordWrap(True)
+            content_label.setStyleSheet("font-size: 14px; padding: 10px;")
+            content_layout.addWidget(content_label)
+
+            scroll.setWidget(content_widget)
+            layout.addWidget(scroll)
+
+        else:  # question_answer
+            title_label = QLabel("❓ Карточка Вопрос-Ответ")
+            title_label.setStyleSheet("font-size: 16px; font-weight: bold;")
+            layout.addWidget(title_label)
+
+            # Вопрос (всегда виден)
+            question_frame = QFrame()
+            question_frame.setStyleSheet("""
+                QFrame {
+                    background-color: #FFF3E0;
+                    border-radius: 8px;
+                    padding: 10px;
+                    margin-top: 10px;
+                }
+            """)
+            question_layout = QVBoxLayout(question_frame)
+            question_layout.addWidget(QLabel("<b>Вопрос:</b>"))
+            question_label = QLabel(card.question)
+            question_label.setWordWrap(True)
+            question_label.setStyleSheet("font-size: 14px;")
+            question_layout.addWidget(question_label)
+            layout.addWidget(question_frame)
+
+            # Кнопка показа/скрытия ответа
+            self.dialog_answer_widget = None  # для хранения ссылки
+            self.dialog_toggle_btn = None
+
+            toggle_btn = QPushButton("📖 Показать ответ")
+            toggle_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #4CAF50;
+                    color: white;
+                    border: none;
+                    border-radius: 5px;
+                    padding: 8px;
+                    font-size: 13px;
+                    margin-top: 10px;
+                }
+                QPushButton:hover { background-color: #45a049; }
+            """)
+            layout.addWidget(toggle_btn)
+
+            # Контейнер для ответа (изначально скрыт)
+            answer_container = QWidget()
+            answer_container.setVisible(False)
+            answer_container.setStyleSheet("""
+                QWidget {
+                    background-color: #E8F5E9;
+                    border-radius: 8px;
+                    padding: 10px;
+                    margin-top: 10px;
+                }
+            """)
+            answer_layout = QVBoxLayout(answer_container)
+            answer_layout.addWidget(QLabel("<b>Ответ:</b>"))
+            answer_label = QLabel(card.answer)
+            answer_label.setWordWrap(True)
+            answer_label.setStyleSheet("font-size: 14px;")
+            answer_layout.addWidget(answer_label)
+            layout.addWidget(answer_container)
+
+            # Подключаем переключение
+            def toggle_answer():
+                if answer_container.isVisible():
+                    answer_container.setVisible(False)
+                    toggle_btn.setText("📖 Показать ответ")
+                else:
+                    answer_container.setVisible(True)
+                    toggle_btn.setText("📖 Скрыть ответ")
+
+            toggle_btn.clicked.connect(toggle_answer)
+
+            layout.addStretch()
+
+        # Кнопки внизу
+        btn_layout = QHBoxLayout()
+        edit_btn = QPushButton("✏️ Редактировать")
+        edit_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #FFC107;
+                border: none;
+                border-radius: 4px;
+                padding: 6px 12px;
+                font-size: 12px;
+            }
+            QPushButton:hover { background-color: #FFB300; }
+        """)
+        edit_btn.clicked.connect(lambda: self._edit_from_dialog(card_id, dialog))
+
+        close_btn = QPushButton("Закрыть")
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 6px 12px;
+                font-size: 12px;
+            }
+            QPushButton:hover { background-color: #1976D2; }
+        """)
+        close_btn.clicked.connect(dialog.accept)
+
+        btn_layout.addStretch()
+        btn_layout.addWidget(edit_btn)
+        btn_layout.addWidget(close_btn)
+        layout.addLayout(btn_layout)
+
+        dialog.exec()
+
+    def _edit_from_dialog(self, card_id: int, dialog: QDialog):
+        """Закрывает диалог и открывает редактирование карточки."""
+        dialog.accept()
+        self.edit_card(card_id)
