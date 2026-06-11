@@ -9,6 +9,7 @@ from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QComboBox, QGridLayout, QScrollArea
 from views.note_editor_view import NoteEditorView
 from views.flashcards_view import FlashcardsView
+from views.tasks_view import TasksView
 class TopicView(QWidget):
     back_requested = Signal()  # возврат к списку тем
 
@@ -126,9 +127,11 @@ class TopicView(QWidget):
         )
         self.stack.addWidget(self.flashcards_view)  # индекс 3
 
-        tasks_widget = QLabel("✅ Здесь будут задачи\n\nСписок задач с дедлайнами появится позже")
-        tasks_widget.setAlignment(Qt.AlignCenter)
-        self.stack.addWidget(tasks_widget)  # индекс 4
+        self.tasks_view = TasksView(
+            task_controller=task_controller,
+            topic_id=topic_id
+        )
+        self.stack.addWidget(self.tasks_view)  # индекс 4
 
         sessions_widget = QLabel("⏱ Здесь будут сессии\n\nТрекер времени и концентрации появится позже")
         sessions_widget.setAlignment(Qt.AlignCenter)

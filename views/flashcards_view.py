@@ -2,7 +2,7 @@
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-    QLabel, QScrollArea, QFrame, QMessageBox, QInputDialog
+    QLabel, QScrollArea, QFrame, QMessageBox, QComboBox
 )
 from PySide6.QtCore import Qt, Signal
 from widgets.card_type_dialog import CardTypeDialog
@@ -19,6 +19,7 @@ class FlashcardsView(QWidget):
         self.topic_id = topic_id
 
         self.current_cards = []
+        self.current_filter = "all"  # all, free, qa
 
         self.setup_ui()
         self.load_cards()
@@ -27,15 +28,40 @@ class FlashcardsView(QWidget):
         """Настройка интерфейса."""
         layout = QVBoxLayout(self)
 
-        # Верхняя панель с кнопкой создания
+        # ========== Верхняя панель: кнопка создания + фильтр ==========
         top_bar = QHBoxLayout()
+
         self.create_btn = QPushButton("+ Создать карточку")
         self.create_btn.clicked.connect(self.create_card)
         top_bar.addWidget(self.create_btn)
+
+        top_bar.addSpacing(20)
+
+        # Фильтр по типу карточек
+        filter_label = QLabel("Показать:")
+        filter_label.setStyleSheet("font-size: 12px;")
+        top_bar.addWidget(filter_label)
+
+        self.filter_combo = QComboBox()
+        self.filter_combo.addItem("📋 Все карточки", "all")
+        self.filter_combo.addItem("📝 Свободные", "free")
+        self.filter_combo.addItem("❓ Вопрос-Ответ", "qa")
+        self.filter_combo.setStyleSheet("""
+            QComboBox {
+                padding: 4px 8px;
+                border: 1px solid #CCC;
+                border-radius: 4px;
+                background-color: white;
+                font-size: 12px;
+            }
+        """)
+        self.filter_combo.currentIndexChanged.connect(self._on_filter_changed)
+        top_bar.addWidget(self.filter_combo)
+
         top_bar.addStretch()
         layout.addLayout(top_bar)
 
-        # Область для списка карточек (с прокруткой)
+        # ========== Область для списка карточек ==========
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setStyleSheet("QScrollArea { border: none; background: transparent; }")
@@ -48,32 +74,45 @@ class FlashcardsView(QWidget):
         self.scroll_area.setWidget(self.cards_container)
         layout.addWidget(self.scroll_area)
 
+    def _on_filter_changed(self):
+        """Обработчик изменения фильтра."""
+        self.current_filter = self.filter_combo.currentData()
+        self.display_cards()
+
     def load_cards(self):
-        """Загружает карточки из БД и отображает их."""
+        """Загружает карточки из БД."""
         self.current_cards = self.flashcard_controller.get_cards_by_topic(self.topic_id)
         self.display_cards()
 
     def display_cards(self):
-        """Отображает карточки в виде списка с датами."""
+        """Отображает карточки с учётом фильтра."""
         # Очищаем старые виджеты
         while self.cards_layout.count():
             item = self.cards_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
 
-        if not self.current_cards:
+        # Фильтруем карточки
+        if self.current_filter == "free":
+            filtered_cards = [c for c in self.current_cards if c.type == "free"]
+        elif self.current_filter == "qa":
+            filtered_cards = [c for c in self.current_cards if c.type == "qa"]
+        else:
+            filtered_cards = self.current_cards
+
+        if not filtered_cards:
             empty_label = QLabel("Нет карточек. Создайте первую!")
             empty_label.setAlignment(Qt.AlignCenter)
             empty_label.setStyleSheet("color: gray; padding: 40px;")
             self.cards_layout.addWidget(empty_label)
             return
 
-        for card in self.current_cards:
+        for card in filtered_cards:
             card_widget = self._create_card_widget(card)
             self.cards_layout.addWidget(card_widget)
 
     def _create_card_widget(self, card):
-        """Создаёт виджет для одной карточки с датой."""
+        """Создаёт виджет для одной карточки (без текстового типа, только иконка)."""
         card_frame = QFrame()
         card_frame.setFrameShape(QFrame.Box)
         card_frame.setStyleSheet("""
@@ -91,21 +130,28 @@ class FlashcardsView(QWidget):
 
         layout = QVBoxLayout(card_frame)
 
-        # ========== Верхняя строка: тип карточки и кнопки ==========
+        # ========== Верхняя строка: иконка + кнопки ==========
         header_layout = QHBoxLayout()
 
+        # Иконка вместо текстового типа
         if card.type == "free":
-            title_text = "📝 Свободная карточка"
+            icon_label = QLabel("📝")
+            icon_label.setStyleSheet("font-size: 18px;")
             content_preview = card.content[:100] + "..." if len(card.content or "") > 100 else card.content
         else:
-            title_text = "❓ Вопрос-Ответ"
+            icon_label = QLabel("❓")
+            icon_label.setStyleSheet("font-size: 18px;")
             content_preview = card.question[:100] + "..." if len(card.question or "") > 100 else card.question
 
-        title_label = QLabel(title_text)
-        title_label.setStyleSheet("font-weight: bold; font-size: 14px;")
-        header_layout.addWidget(title_label)
+        header_layout.addWidget(icon_label)
+        header_layout.addSpacing(5)
 
-        header_layout.addStretch()
+        # Превью содержимого
+        preview_label = QLabel(content_preview or "Нет содержимого")
+        preview_label.setWordWrap(True)
+        preview_label.setStyleSheet("color: #333; font-size: 13px;")
+        preview_label.setMinimumWidth(200)
+        header_layout.addWidget(preview_label, stretch=1)
 
         # Кнопка редактирования
         edit_btn = QPushButton("✏️")
@@ -141,14 +187,7 @@ class FlashcardsView(QWidget):
 
         layout.addLayout(header_layout)
 
-        # ========== Превью содержимого ==========
-        preview_label = QLabel(content_preview or "Нет содержимого")
-        preview_label.setWordWrap(True)
-        preview_label.setStyleSheet("color: #555; margin-top: 5px;")
-        layout.addWidget(preview_label)
-
         # ========== Дата ==========
-        # Берём updated_at если есть, иначе created_at
         date_str = ""
         if hasattr(card, 'updated_at') and card.updated_at:
             date_str = card.updated_at[:16]
