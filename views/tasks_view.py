@@ -607,3 +607,4 @@ class TasksView(QWidget):
     def refresh(self):
         """Обновляет список задач."""
         self.load_tasks()
+

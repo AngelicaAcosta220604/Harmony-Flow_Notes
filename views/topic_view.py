@@ -10,8 +10,13 @@ from PySide6.QtWidgets import QComboBox, QGridLayout, QScrollArea
 from views.note_editor_view import NoteEditorView
 from views.flashcards_view import FlashcardsView
 from views.tasks_view import TasksView
+from views.sessions_view import SessionsView
+
+
 class TopicView(QWidget):
     back_requested = Signal()  # возврат к списку тем
+    start_session_requested = Signal(int, str)  # topic_id, topic_name
+    show_session_analytics = Signal(int)  # session_id
 
     def __init__(self, topic_id: int, topic_controller, note_controller,
                  flashcard_controller, task_controller, session_controller,
@@ -133,9 +138,14 @@ class TopicView(QWidget):
         )
         self.stack.addWidget(self.tasks_view)  # индекс 4
 
-        sessions_widget = QLabel("⏱ Здесь будут сессии\n\nТрекер времени и концентрации появится позже")
-        sessions_widget.setAlignment(Qt.AlignCenter)
-        self.stack.addWidget(sessions_widget)  # индекс 5
+        self.sessions_view = SessionsView(
+            session_controller=session_controller,
+            topic_id=topic_id,
+            topic_name=self.topic.name,
+            parent=self  # ← parent=self вместо topic_view=self
+        )
+        self.sessions_view.start_session_requested.connect(self._start_new_session)
+        self.stack.addWidget(self.sessions_view)  # индекс 5
 
         analytics_widget = QLabel("📊 Здесь будет аналитика\n\nГрафики и статистика появятся позже")
         analytics_widget.setAlignment(Qt.AlignCenter)
@@ -246,8 +256,6 @@ class TopicView(QWidget):
 
         return page
 
-
-
     def _create_edit_view_page(self) -> QWidget:
         """Страница редактирования записи (режим редактирования)."""
         page = QWidget()
@@ -277,6 +285,7 @@ class TopicView(QWidget):
         """Обновляет список после сохранения"""
         self._load_notes_list()
         self._update_read_view()
+
     # ==================== НАВИГАЦИЯ МЕЖДУ РЕЖИМАМИ ====================
 
     def _switch_to_notes_main(self):
@@ -659,3 +668,21 @@ class TopicView(QWidget):
         self._load_notes_list()
         self.stack.setCurrentIndex(2)
 
+    def _start_new_session(self, topic_id: int, topic_name: str):
+        """Запускает новую сессию для темы."""
+        # Переключаемся на экран выбора сессии в главном окне
+        # Сигнал будет перехвачен в main_window
+        self.start_session_requested.emit(topic_id, topic_name)
+
+    def _on_show_session_analytics(self, session_id: int):
+        """Показывает аналитику по конкретной сессии."""
+        # Переключаемся на вкладку аналитики и передаём session_id
+        self.show_session_analytics.emit(session_id)
+
+    def show_session_analytics_from_session(self, session_id: int):
+        """Показывает аналитику по сессии (вызывается из SessionsView)"""
+        # Переключаемся на вкладку аналитики (индекс 6)
+        self.stack.setCurrentIndex(6)
+        # Временно показываем сообщение
+        analytics_widget = self.stack.widget(6)
+        analytics_widget.setText(f"📊 Аналитика сессии #{session_id}\n\nЗдесь будут графики и статистика")

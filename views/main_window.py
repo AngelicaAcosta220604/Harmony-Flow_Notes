@@ -196,5 +196,25 @@ class MainWindow(QMainWindow):
             session_controller=self.session_controller
         )
         topic_view.back_requested.connect(lambda: self.stack.setCurrentIndex(1))
+        topic_view.start_session_requested.connect(self._start_session_from_topic)
+        topic_view.show_session_analytics.connect(self._show_session_analytics)
         self.stack.addWidget(topic_view)
         self.stack.setCurrentWidget(topic_view)
+
+    def _start_session_from_topic(self, topic_id: int, topic_name: str):
+        """Запускает сессию из темы"""
+        # Переключаемся на экран выбора сессии
+        self.stack.setCurrentIndex(2)  # FocusSetupView
+        # Устанавливаем выбранную тему в комбобокс
+        index = self.session_topic_combo.findData(topic_id)
+        if index >= 0:
+            self.session_topic_combo.setCurrentIndex(index)
+        # Автоматически запускаем сессию (опционально)
+        # self.start_session_from_setup()
+
+    def _show_session_analytics(self, session_id: int):
+        """Показывает аналитику по сессии."""
+        # Переключаемся на вкладку аналитики (индекс 5)
+        self.stack.setCurrentIndex(5)
+        # TODO: передать session_id в AnalyticsView для отображения аналитики по сессии
+        # self.analytics_view.load_session_analytics(session_id)
