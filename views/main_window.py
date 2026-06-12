@@ -88,6 +88,8 @@ class MainWindow(QMainWindow):
         # Страница 1: Дерево тем
         self.tree_widget = TreeWidget(topic_controller=self.topic_controller)
         self.tree_widget.topic_selected.connect(self.on_topic_selected)
+        # Подключаем сигнал обновления тем из дерева
+        self.tree_widget.topics_changed.connect(self.on_topics_changed)
 
         # Страница 2: Экран выбора темы для сессии
         self.focus_setup_view = self._create_focus_setup_view()
@@ -202,6 +204,7 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentIndex(2)
         self.refresh_topic_combo()
         self.tree_widget.load_topics()
+        self.refresh_global_cards()  # ← ДОБАВИТЬ
 
     def show_ping_dialog(self):
         from widgets.ping_dialog import PingDialog
@@ -226,6 +229,7 @@ class MainWindow(QMainWindow):
         topic_view.show_session_analytics.connect(self._show_session_analytics)
         topic_view.cards_updated.connect(self.refresh_global_cards)
         topic_view.topic_updated.connect(self.refresh_topic_combo)
+        topic_view.topic_updated.connect(self.refresh_global_cards)  # ← ДОБАВИТЬ
         self.stack.addWidget(topic_view)
         self.stack.setCurrentWidget(topic_view)
 
@@ -249,3 +253,9 @@ class MainWindow(QMainWindow):
         """Обновляет глобальную страницу карточек"""
         if hasattr(self, 'global_cards_view'):
             self.global_cards_view.refresh()
+
+    def on_topics_changed(self):
+        """Вызывается когда темы были изменены (созданы/удалены/переименованы/перемещены)"""
+        self.refresh_topic_combo()
+        self.refresh_global_cards()
+        self.tree_widget.load_topics()

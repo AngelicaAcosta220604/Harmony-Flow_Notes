@@ -137,10 +137,9 @@ class SessionsView(QWidget):
         """)
         is_expanded = session.id in self.expanded_items
         expand_btn.setText("▼" if is_expanded else "▶")
-        expand_btn.clicked.connect(lambda checked, sid=session.id, btn=expand_btn: self._toggle_expand(sid, btn))
+
         header_layout.addWidget(expand_btn)
 
-        from services.time_service import TimeService
         date_label = QLabel(f"⏱ {TimeService.format_display(session.start_time)}")
         date_label.setStyleSheet("font-size: 13px; font-weight: bold;")
         header_layout.addWidget(date_label)
@@ -182,24 +181,6 @@ class SessionsView(QWidget):
 
         info_layout.addStretch()
 
-        # analytics_btn = QPushButton("📊 Аналитика сессии")
-        # analytics_btn.setFixedSize(130, 26)
-        # analytics_btn.setStyleSheet("""
-        #     QPushButton {
-        #         background-color: #2196F3;
-        #         color: white;
-        #         border: none;
-        #         border-radius: 4px;
-        #         font-size: 11px;
-        #     }
-        #     QPushButton:hover {
-        #         background-color: #0b7dda;
-        #     }
-        # """)
-        # Вызываем сигнал, который будет обработан в TopicView
-        # analytics_btn.clicked.connect(lambda checked, sid=session.id: self._on_analytics_clicked(sid))
-        # info_layout.addWidget(analytics_btn)
-
         delete_btn = QPushButton("🗑️ Удалить")
         delete_btn.setFixedSize(80, 26)
         delete_btn.setStyleSheet("""
@@ -219,14 +200,14 @@ class SessionsView(QWidget):
 
         layout.addLayout(info_layout)
 
-        # Раскрывающаяся часть
+        # Раскрывающаяся часть — СОЗДАЁМ ОДИН РАЗ
         expand_widget = QWidget()
         expand_widget.setVisible(is_expanded)
         expand_layout = QVBoxLayout(expand_widget)
         expand_layout.setContentsMargins(30, 10, 0, 5)
 
+        # Заполняем контейнер
         quick_notes = self.session_controller.get_quick_notes(session.id)
-
         if quick_notes:
             expand_layout.addWidget(QLabel("📝 Быстрые записи во время сессии:"))
             for note in quick_notes:
@@ -239,16 +220,14 @@ class SessionsView(QWidget):
 
         layout.addWidget(expand_widget)
 
-        return card_frame
+        # Сохраняем ссылки для управления видимостью
+        card_frame.expand_widget = expand_widget
+        card_frame.expand_btn = expand_btn
 
-    # def _on_analytics_clicked(self, session_id: int):
-    #     """Отправляет сигнал родительскому окну для показа аналитики"""
-    #     # Находим родительский TopicView
-    #     parent = self.parent()
-    #     while parent and not hasattr(parent, 'show_session_analytics_from_session'):
-    #         parent = parent.parent()
-    #     if parent and hasattr(parent, 'show_session_analytics_from_session'):
-    #         parent.show_session_analytics_from_session(session_id)
+        # Подключаем сигнал напрямую
+        expand_btn.clicked.connect(lambda checked, cf=card_frame: self._toggle_expand_card(cf))
+
+        return card_frame
 
     def _create_note_widget(self, note):
         note_frame = QFrame()
@@ -266,12 +245,11 @@ class SessionsView(QWidget):
         layout.setContentsMargins(8, 5, 8, 5)
 
         if note.created_at:
-            try:
-                date_label = QLabel(f"📌 {TimeService.format_display(note.created_at)}")
+            date_str = TimeService.format_display(note.created_at)
+            if date_str:
+                date_label = QLabel(f"📌 {date_str}")
                 date_label.setStyleSheet("color: #888; font-size: 10px;")
                 layout.addWidget(date_label)
-            except:
-                pass
 
         text_label = QLabel(note.content)
         text_label.setWordWrap(True)
@@ -280,32 +258,26 @@ class SessionsView(QWidget):
 
         return note_frame
 
-    def _toggle_expand(self, session_id: int, btn):
-        if session_id in self.expanded_items:
-            self.expanded_items.remove(session_id)
-            btn.setText("▶")
-        else:
-            self.expanded_items.add(session_id)
-            btn.setText("▼")
-        self.display_sessions()
+    def _toggle_expand_card(self, card_frame):
+        """Переключает видимость раскрывающейся части конкретной карточки"""
+        if hasattr(card_frame, 'expand_widget') and hasattr(card_frame, 'expand_btn'):
+            is_visible = card_frame.expand_widget.isVisible()
+            card_frame.expand_widget.setVisible(not is_visible)
+            card_frame.expand_btn.setText("▼" if not is_visible else "▶")
 
-    def _format_datetime(self, datetime_str):
-        if not datetime_str:
-            return ""
-        try:
-            dt = datetime.fromisoformat(datetime_str)
-            return dt.strftime("%d.%m.%Y %H:%M")
-        except:
-            return datetime_str[:16]
+            # Обновляем состояние в self.expanded_items
+            session_id = card_frame.property("session_id")
+            if session_id:
+                if not is_visible:
+                    self.expanded_items.add(session_id)
+                else:
+                    self.expanded_items.discard(session_id)
 
     def _format_time_range(self, start_str, end_str):
         if not start_str:
             return ""
         try:
-            from services.time_service import TimeService
-            start_display = TimeService.format_display(start_str)  # дата и время
-            # Или только время:
-            start_time = TimeService.format_display(start_str).split()[-1]  # последняя часть - время
+            start_time = TimeService.format_display(start_str).split()[-1]
 
             if end_str:
                 end_time = TimeService.format_display(end_str).split()[-1]

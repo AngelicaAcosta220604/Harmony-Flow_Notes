@@ -83,7 +83,7 @@ class TopicView(QWidget):
         self.btn_notes = QPushButton("📝 Записи")
         self.btn_cards = QPushButton("🃏 Карточки")
         self.btn_tasks = QPushButton("✅ Задачи")
-        self.btn_sessions = QPushButton("⏱ Сессии")
+        self.btn_sessions = QPushButton("⏱ История сессий")
         self.btn_analytics = QPushButton("📊 Аналитика")
 
         menu_style = """

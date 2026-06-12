@@ -4,9 +4,9 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QTreeWidget, QTreeWidgetItem, QPushButton,
     QInputDialog, QLineEdit,
-    QLabel, QMenu, QComboBox, QMessageBox
+    QLabel, QMenu, QComboBox,
 )
-
+from widgets.silent_dialog import SilentMessageBox, SilentInputDialog
 from PySide6.QtGui import QAction
 from PySide6.QtCore import Qt, Signal, QPoint
 from controllers.topic_controller import TopicController
@@ -14,6 +14,7 @@ from controllers.topic_controller import TopicController
 
 class TreeWidget(QWidget):
     topic_selected = Signal(int)
+    topics_changed = Signal()  # ← НОВЫЙ СИГНАЛ
 
     def __init__(self, topic_controller: TopicController, parent=None):
         super().__init__(parent)
@@ -69,7 +70,7 @@ class TreeWidget(QWidget):
         btn_row.addStretch()
         layout.addLayout(btn_row)
 
-        # Дерево (drag & drop ОТКЛЮЧЁН)
+        # Дерево
         self.tree = QTreeWidget()
         self.tree.setHeaderHidden(True)
         self.tree.setIndentation(20)
@@ -92,7 +93,6 @@ class TreeWidget(QWidget):
             }
         """)
 
-        # Drag & drop ОТКЛЮЧЁН
         self.tree.setDragEnabled(False)
         self.tree.setAcceptDrops(False)
         self.tree.setDropIndicatorShown(False)
@@ -152,6 +152,8 @@ class TreeWidget(QWidget):
         self._build_tree(sorted_topics)
 
     def _build_tree(self, topics):
+        from services.time_service import TimeService
+
         self.tree.clear()
 
         if not topics:
@@ -169,11 +171,7 @@ class TreeWidget(QWidget):
             items_map[topic.id] = item
 
             icon = "📁" if topic.type == "folder" else "📄"
-            date_str = ""
-            if topic.updated_at:
-                date_str = topic.updated_at[:16]
-            elif topic.created_at:
-                date_str = topic.created_at[:16]
+            date_str = TimeService.format_display(topic.updated_at or topic.created_at)
 
             if date_str:
                 display_text = f"{icon} {topic.name}   {date_str}"
@@ -192,7 +190,6 @@ class TreeWidget(QWidget):
                 else:
                     self.tree.addTopLevelItem(item)
 
-        # Папки СВЁРНУТЫ по умолчанию
         self.tree.collapseAll()
 
     # ==================== КОНТЕКСТНОЕ МЕНЮ ====================
@@ -231,11 +228,22 @@ class TreeWidget(QWidget):
         folders = [t for t in self.all_topics if t.type == "folder" and t.id != topic_id]
 
         if not folders:
-            QMessageBox.information(self, "Перемещение", "Нет доступных папок для перемещения.")
+            SilentMessageBox.information(self, "Перемещение", "Нет доступных папок для перемещения.")
             return
 
         folder_names = ["📁 Корень (без папки)"] + [f"📁 {f.name}" for f in folders]
 
+        folder_name, ok = SilentInputDialog.getText(
+            self, "Переместить",
+            f"Куда переместить «{name}»?"
+        )
+
+        if not ok:
+            return
+
+        # Нужно выбрать из выпадающего списка, но SilentInputDialog не поддерживает combo
+        # Поэтому используем QInputDialog.getItem но без звука
+        from PySide6.QtWidgets import QInputDialog
         folder_name, ok = QInputDialog.getItem(
             self, "Переместить",
             f"Куда переместить «{name}»?",
@@ -251,37 +259,41 @@ class TreeWidget(QWidget):
 
             self.topic_controller.move_topic(topic_id, new_parent_id)
             self.load_topics()
-            QMessageBox.information(self, "Готово", f"«{name}» перемещена")
+            self.topics_changed.emit()  # ← СИГНАЛ
+            SilentMessageBox.information(self, "Готово", f"«{name}» перемещена")
 
     # ==================== ОПЕРАЦИИ ====================
 
     def _create_folder(self):
-        name, ok = QInputDialog.getText(self, "Новая папка", "Введите название папки:")
+        name, ok = SilentInputDialog.getText(self, "Новая папка", "Введите название папки:")
         if ok and name.strip():
             self.topic_controller.add_topic(name.strip(), parent_id=None, type="folder")
             self.load_topics()
+            self.topics_changed.emit()  # ← СИГНАЛ
 
     def _create_topic(self):
-        name, ok = QInputDialog.getText(self, "Новая тема", "Введите название темы:")
+        name, ok = SilentInputDialog.getText(self, "Новая тема", "Введите название темы:")
         if ok and name.strip():
             self.topic_controller.add_topic(name.strip(), parent_id=None, type="topic")
             self.load_topics()
+            self.topics_changed.emit()  # ← СИГНАЛ
 
     def _rename_topic(self, topic_id: int, old_name: str):
-        new_name, ok = QInputDialog.getText(self, "Переименовать", "Новое название:", text=old_name)
+        new_name, ok = SilentInputDialog.getText(self, "Переименовать", "Новое название:", text=old_name)
         if ok and new_name.strip():
             self.topic_controller.rename_topic(topic_id, new_name.strip())
             self.load_topics()
+            self.topics_changed.emit()  # ← СИГНАЛ
 
     def _delete_topic(self, topic_id: int, name: str):
-        reply = QMessageBox.question(
+        reply = SilentMessageBox.question(
             self, "Удаление",
-            f"Удалить «{name}» и всё содержимое?",
-            QMessageBox.Yes | QMessageBox.No
+            f"Удалить «{name}» и всё содержимое?"
         )
         if reply == QMessageBox.Yes:
             self.topic_controller.delete_topic(topic_id)
             self.load_topics()
+            self.topics_changed.emit()  # ← СИГНАЛ
 
     def _on_item_clicked(self, item: QTreeWidgetItem, column: int):
         topic_id = item.data(0, Qt.UserRole)
