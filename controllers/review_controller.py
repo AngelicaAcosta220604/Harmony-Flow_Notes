@@ -4,6 +4,7 @@ from database.db_manager import db
 from models.review_session import ReviewSession
 from models.review_answer import ReviewAnswer
 from controllers.flashcard_controller import FlashcardController
+from utils.local_time import now_local_iso
 from datetime import datetime
 from typing import List
 
@@ -36,10 +37,11 @@ class ReviewController:
         self.session_start_time = datetime.now()
 
         # Создаём запись о сессии в БД
+        now = now_local_iso()
         session_id = db.execute("""
             INSERT INTO review_sessions (session_date, total_cards, completed_cards, duration_minutes)
-            VALUES (datetime('now'), ?, 0, 0)
-        """, (len(cards),))
+            VALUES (?, ?, 0, 0)
+        """, (now, len(cards)))
 
         self.current_session_id = session_id
         return cards
@@ -70,23 +72,25 @@ class ReviewController:
         self.current_card_index += 1
 
         # Обновляем прогресс сессии
+        now = now_local_iso()
         db.execute("""
             UPDATE review_sessions 
             SET completed_cards = completed_cards + 1,
-                duration_minutes = CAST((JULIANDAY('now') - JULIANDAY(session_date)) * 24 * 60 AS INTEGER)
+                duration_minutes = CAST((JULIANDAY(?) - JULIANDAY(session_date)) * 24 * 60 AS INTEGER)
             WHERE id = ?
-        """, (self.current_session_id,))
+        """, (now, self.current_session_id))
 
         return True
 
     def finish_session(self):
         """Завершает сессию"""
         if self.current_session_id:
+            now = now_local_iso()
             db.execute("""
                 UPDATE review_sessions 
-                SET duration_minutes = CAST((JULIANDAY('now') - JULIANDAY(session_date)) * 24 * 60 AS INTEGER)
+                SET duration_minutes = CAST((JULIANDAY(?) - JULIANDAY(session_date)) * 24 * 60 AS INTEGER)
                 WHERE id = ?
-            """, (self.current_session_id,))
+            """, (now, self.current_session_id))
             return True
         return False
 

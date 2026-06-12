@@ -11,9 +11,10 @@ TopicController — контроллер для работы с темами и 
 
 Это один из ключевых модулей приложения.
 """
-# controllers/topic_controller.py
+
 from database.db_manager import db
 from models.topic import Topic
+from utils.local_time import now_local_iso
 from typing import List, Optional
 
 
@@ -32,21 +33,26 @@ class TopicController:
 
     def add_topic(self, name: str, parent_id: int = None, type: str = "topic") -> int:
         """Добавляет новую тему или папку. Возвращает id созданной записи."""
+        now = now_local_iso()
         return db.execute(
-            "INSERT INTO topics (name, parent_id, type) VALUES (?, ?, ?)",
-            (name, parent_id, type)
+            "INSERT INTO topics (name, parent_id, type, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+            (name, parent_id, type, now, now)
         )
 
     def rename_topic(self, topic_id: int, new_name: str) -> None:
+        """Переименовывает тему."""
+        now = now_local_iso()
         db.execute(
-            "UPDATE topics SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-            (new_name, topic_id)
+            "UPDATE topics SET name = ?, updated_at = ? WHERE id = ?",
+            (new_name, now, topic_id)
         )
 
     def move_topic(self, topic_id: int, new_parent_id: Optional[int]) -> None:
+        """Перемещает тему в другую папку."""
+        now = now_local_iso()
         db.execute(
-            "UPDATE topics SET parent_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-            (new_parent_id, topic_id)
+            "UPDATE topics SET parent_id = ?, updated_at = ? WHERE id = ?",
+            (new_parent_id, now, topic_id)
         )
 
     def delete_topic(self, topic_id: int) -> None:
@@ -66,15 +72,7 @@ class TopicController:
         """Возвращает все темы, отсортированные для построения дерева."""
         return self.get_all_topics()
 
-
-def move_topic(self, topic_id: int, new_parent_id: Optional[int]) -> None:
-    print(f"DEBUG move_topic: topic {topic_id} -> parent {new_parent_id}")  # ДОБАВИТЬ
-    db.execute(
-        "UPDATE topics SET parent_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-        (new_parent_id, topic_id)
-    )
-    print(f"DEBUG move_topic: SQL выполнен")  # ДОБАВИТЬ
-
-def update_timestamp(self, topic_id: int):
-    """Обновляет updated_at темы (когда меняется содержимое)"""
-    db.execute("UPDATE topics SET updated_at = CURRENT_TIMESTAMP WHERE id = ?", (topic_id,))
+    def update_timestamp(self, topic_id: int):
+        """Обновляет updated_at темы (когда меняется содержимое)"""
+        now = now_local_iso()
+        db.execute("UPDATE topics SET updated_at = ? WHERE id = ?", (now, topic_id))

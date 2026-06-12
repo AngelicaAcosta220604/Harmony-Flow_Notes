@@ -33,8 +33,8 @@ class DatabaseManager:
                     description TEXT,
                     parent_id INTEGER,
                     type TEXT DEFAULT 'topic',
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    created_at TIMESTAMP,
+                    updated_at TIMESTAMP,
                     FOREIGN KEY (parent_id) REFERENCES topics (id)
                 )
             """)
@@ -46,13 +46,12 @@ class DatabaseManager:
                     topic_id INTEGER NOT NULL,
                     title TEXT,
                     content TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    created_at TIMESTAMP,
+                    updated_at TIMESTAMP,
                     FOREIGN KEY (topic_id) REFERENCES topics (id)
                 )
             """)
 
-            # flashcards (карточки)
             # flashcards (карточки)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS flashcards (
@@ -63,23 +62,18 @@ class DatabaseManager:
                     question TEXT,
                     answer TEXT,
                     content TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    created_at TIMESTAMP,
+                    updated_at TIMESTAMP,
+                    review_status TEXT DEFAULT 'new',
+                    consecutive_correct INTEGER DEFAULT 0,
+                    last_reviewed TIMESTAMP,
+                    is_active INTEGER DEFAULT 1,
                     FOREIGN KEY (topic_id) REFERENCES topics (id),
                     FOREIGN KEY (source_note_id) REFERENCES notes (id)
                 )
             """)
-            cursor.execute("PRAGMA table_info(flashcards)")
-            existing_columns = [col[1] for col in cursor.fetchall()]
 
-            if 'review_status' not in existing_columns:
-                cursor.execute("ALTER TABLE flashcards ADD COLUMN review_status TEXT DEFAULT 'new'")
-            if 'consecutive_correct' not in existing_columns:
-                cursor.execute("ALTER TABLE flashcards ADD COLUMN consecutive_correct INTEGER DEFAULT 0")
-            if 'last_reviewed' not in existing_columns:
-                cursor.execute("ALTER TABLE flashcards ADD COLUMN last_reviewed DATETIME")
-            if 'is_active' not in existing_columns:
-                cursor.execute("ALTER TABLE flashcards ADD COLUMN is_active INTEGER DEFAULT 1")
-
+            # review_sessions
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS review_sessions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -90,6 +84,7 @@ class DatabaseManager:
                 )
             """)
 
+            # review_answers
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS review_answers (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -111,7 +106,7 @@ class DatabaseManager:
                     description TEXT,
                     deadline TIMESTAMP,
                     status TEXT DEFAULT 'active',
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    created_at TIMESTAMP,
                     completed_at TIMESTAMP,
                     FOREIGN KEY (topic_id) REFERENCES topics (id)
                 )
@@ -126,7 +121,7 @@ class DatabaseManager:
                     end_time TIMESTAMP,
                     duration_minutes INTEGER,
                     status TEXT DEFAULT 'active',
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    created_at TIMESTAMP,
                     FOREIGN KEY (topic_id) REFERENCES topics (id)
                 )
             """)
@@ -139,7 +134,7 @@ class DatabaseManager:
                     metric TEXT NOT NULL,
                     value INTEGER NOT NULL,
                     minute INTEGER,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    created_at TIMESTAMP,
                     FOREIGN KEY (session_id) REFERENCES sessions (id)
                 )
             """)
@@ -151,7 +146,7 @@ class DatabaseManager:
                     session_id INTEGER NOT NULL,
                     topic_id INTEGER NOT NULL,
                     content TEXT NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    created_at TIMESTAMP,
                     FOREIGN KEY (session_id) REFERENCES sessions (id),
                     FOREIGN KEY (topic_id) REFERENCES topics (id)
                 )
@@ -166,11 +161,6 @@ class DatabaseManager:
                 )
             """)
 
-            # database/db_manager.py
-            # В методе _init_tables() после создания всех таблиц добавьте:
-
-
-
             # Добавляем настройки по умолчанию, если их нет
             default_settings = [
                 ("user_name", "Пользователь"),
@@ -179,7 +169,8 @@ class DatabaseManager:
                 ("auto_pause_minutes", "10"),
                 ("auto_save_interval_seconds", "60"),
                 ("notifications_enabled", "true"),
-                ("default_sound", "off"),("review_threshold", "3"),
+                ("default_sound", "off"),
+                ("review_threshold", "3"),
             ]
             for key, value in default_settings:
                 cursor.execute("""
@@ -216,6 +207,18 @@ class DatabaseManager:
             cursor.execute(query, params)
             conn.commit()
             return cursor.lastrowid
+
+    def execute_insert(self, query: str, params: tuple = ()) -> int:
+        """Выполняет INSERT и возвращает lastrowid (алиас для execute)."""
+        return self.execute(query, params)
+
+    def execute_update(self, query: str, params: tuple = ()) -> int:
+        """Выполняет UPDATE/DELETE и возвращает количество изменённых строк."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            conn.commit()
+            return cursor.rowcount
 
     def executemany(self, query: str, params_list: List[tuple]) -> None:
         """Выполняет массовую вставку (например, для тестов)."""

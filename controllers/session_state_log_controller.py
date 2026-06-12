@@ -14,7 +14,7 @@ SessionStateLogController — контроллер для логов состо�
 
 from database.db_manager import db
 from models.session_state_log import SessionStateLog
-from datetime import datetime
+from utils.local_time import now_local_iso
 
 
 class SessionStateLogController:
@@ -34,16 +34,18 @@ class SessionStateLogController:
         value: 0–100 (кроме pause/resume)
         minute: номер минуты сессии
         """
+        now = now_local_iso()
         query = """
-            INSERT INTO session_state_logs (session_id, metric, value, timestamp, minute)
+            INSERT INTO session_state_logs (session_id, metric, value, created_at, minute)
             VALUES (?, ?, ?, ?, ?)
         """
-        db.execute(query, (session_id, metric, value, datetime.now(), minute))
+        db.execute(query, (session_id, metric, value, now, minute))
 
     # ---------------------------------------------------------
     # ПОЛУЧЕНИЕ ВСЕХ ЛОГОВ СЕССИИ
     # ---------------------------------------------------------
     def get_logs(self, session_id: int) -> list[SessionStateLog]:
+        """Возвращает все логи сессии."""
         rows = db.fetchall(
             "SELECT * FROM session_state_logs WHERE session_id = ? ORDER BY id ASC",
             (session_id,)
@@ -54,6 +56,7 @@ class SessionStateLogController:
     # ПОЛУЧЕНИЕ ЛОГОВ ПО ТИПУ
     # ---------------------------------------------------------
     def get_logs_by_metric(self, session_id: int, metric: str) -> list[SessionStateLog]:
+        """Возвращает логи сессии по указанной метрике."""
         rows = db.fetchall(
             """
             SELECT * FROM session_state_logs
@@ -104,7 +107,5 @@ class SessionStateLogController:
     # УДАЛЕНИЕ ЛОГОВ СЕССИИ
     # ---------------------------------------------------------
     def delete_logs(self, session_id: int):
-        """
-        Удаляет все логи, связанные с сессией.
-        """
+        """Удаляет все логи, связанные с сессией."""
         db.execute("DELETE FROM session_state_logs WHERE session_id = ?", (session_id,))

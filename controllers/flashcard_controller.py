@@ -3,6 +3,8 @@
 from database.db_manager import db
 from models.flashcard import Flashcard
 from controllers.topic_controller import TopicController
+from utils.local_time import now_local_iso
+
 
 class FlashcardController:
 
@@ -10,19 +12,21 @@ class FlashcardController:
         TopicController().update_timestamp(topic_id)
 
     def create_free_card(self, topic_id: int, content: str, source_note_id: int = None) -> int:
+        now = now_local_iso()
         result = db.execute(
-            "INSERT INTO flashcards (topic_id, source_note_id, type, content) VALUES (?, ?, ?, ?)",
-            (topic_id, source_note_id, "free", content)
+            "INSERT INTO flashcards (topic_id, source_note_id, type, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (topic_id, source_note_id, "free", content, now, now)
         )
-        self._update_topic_timestamp(topic_id)  # <-- ДОБАВИТЬ
+        self._update_topic_timestamp(topic_id)
         return result
 
     def create_qa_card(self, topic_id: int, question: str, answer: str, source_note_id: int = None) -> int:
+        now = now_local_iso()
         result = db.execute(
-            "INSERT INTO flashcards (topic_id, source_note_id, type, question, answer) VALUES (?, ?, ?, ?, ?)",
-            (topic_id, source_note_id, "qa", question, answer)
+            "INSERT INTO flashcards (topic_id, source_note_id, type, question, answer, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (topic_id, source_note_id, "qa", question, answer, now, now)
         )
-        self._update_topic_timestamp(topic_id)  # <-- ДОБАВИТЬ
+        self._update_topic_timestamp(topic_id)
         return result
 
     def get_card(self, card_id: int):
@@ -57,12 +61,14 @@ class FlashcardController:
         if not card:
             return
 
+        now = now_local_iso()
+
         if content is not None:
-            db.execute("UPDATE flashcards SET content = ?, updated_at = datetime('now') WHERE id = ?",
-                       (content, card_id))
+            db.execute("UPDATE flashcards SET content = ?, updated_at = ? WHERE id = ?",
+                       (content, now, card_id))
         elif question is not None and answer is not None:
-            db.execute("UPDATE flashcards SET question = ?, answer = ?, updated_at = datetime('now') WHERE id = ?",
-                       (question, answer, card_id))
+            db.execute("UPDATE flashcards SET question = ?, answer = ?, updated_at = ? WHERE id = ?",
+                       (question, answer, now, card_id))
 
         self._update_topic_timestamp(card.topic_id)
 
@@ -131,11 +137,12 @@ class FlashcardController:
             else:
                 new_status = card.review_status
 
+        now = now_local_iso()
         db.execute("""
             UPDATE flashcards 
-            SET review_status = ?, consecutive_correct = ?, last_reviewed = datetime('now')
+            SET review_status = ?, consecutive_correct = ?, last_reviewed = ?
             WHERE id = ?
-        """, (new_status, new_consecutive, card_id))
+        """, (new_status, new_consecutive, now, card_id))
 
     def get_review_stats(self, topic_id: int = None) -> dict:
         """Возвращает статистику повторений по теме или всем темам"""

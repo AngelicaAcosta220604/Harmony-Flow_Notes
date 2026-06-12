@@ -11,6 +11,7 @@ NoteController — контроллер для управления заметк
 
 from database.db_manager import db
 from models.note import Note
+from utils.local_time import now_local_iso
 from typing import List, Optional
 
 
@@ -22,11 +23,12 @@ class NoteController:
 
     def create_note(self, topic_id: int, title: str, content: str = "") -> int:
         """Создает новую заметку и возвращает её ID"""
+        now = now_local_iso()
         query = """
             INSERT INTO notes (topic_id, title, content, created_at, updated_at)
-            VALUES (?, ?, ?, datetime('now'), datetime('now'))
+            VALUES (?, ?, ?, ?, ?)
         """
-        return db.execute_insert(query, (topic_id, title, content))
+        return db.execute_insert(query, (topic_id, title, content, now, now))
 
     def get_note(self, note_id: int) -> Optional[Note]:
         """Возвращает заметку по ID"""
@@ -56,7 +58,8 @@ class NoteController:
         if not updates:
             return False
 
-        updates.append("updated_at = datetime('now')")
+        updates.append("updated_at = ?")
+        params.append(now_local_iso())
         params.append(note_id)
 
         query = f"UPDATE notes SET {', '.join(updates)} WHERE id = ?"
