@@ -3,9 +3,10 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QTreeWidget, QTreeWidgetItem, QPushButton,
-    QMessageBox, QInputDialog, QLineEdit,
-    QLabel, QMenu, QComboBox
+    QInputDialog, QLineEdit,
+    QLabel, QMenu, QComboBox, QMessageBox
 )
+
 from PySide6.QtGui import QAction
 from PySide6.QtCore import Qt, Signal, QPoint
 from controllers.topic_controller import TopicController
@@ -134,16 +135,16 @@ class TreeWidget(QWidget):
         folders = [t for t in filtered if t.type == "folder"]
         topics = [t for t in filtered if t.type == "topic"]
 
-        if sort_index == 0:
+        if sort_index == 0:  # Новые → Старые
             folders.sort(key=lambda x: x.created_at or "", reverse=True)
             topics.sort(key=lambda x: x.created_at or "", reverse=True)
-        elif sort_index == 1:
+        elif sort_index == 1:  # Старые → Новые
             folders.sort(key=lambda x: x.created_at or "", reverse=False)
             topics.sort(key=lambda x: x.created_at or "", reverse=False)
-        elif sort_index == 2:
+        elif sort_index == 2:  # А → Я
             folders.sort(key=lambda x: x.name.lower())
             topics.sort(key=lambda x: x.name.lower())
-        elif sort_index == 3:
+        elif sort_index == 3:  # Я → А
             folders.sort(key=lambda x: x.name.lower(), reverse=True)
             topics.sort(key=lambda x: x.name.lower(), reverse=True)
 
@@ -191,7 +192,8 @@ class TreeWidget(QWidget):
                 else:
                     self.tree.addTopLevelItem(item)
 
-        self.tree.expandAll()
+        # Папки СВЁРНУТЫ по умолчанию
+        self.tree.collapseAll()
 
     # ==================== КОНТЕКСТНОЕ МЕНЮ ====================
 
