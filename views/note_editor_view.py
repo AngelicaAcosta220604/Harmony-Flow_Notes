@@ -1,9 +1,9 @@
 # views/note_editor_view.py
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-    QMessageBox, QDialog  # QDialog добавлен!
+    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QDialog  # QDialog добавлен!
 )
+from widgets.silent_message_box import QMessageBox
 from PySide6.QtCore import Qt, Signal, QTimer
 from widgets.rich_text_editor import RichTextEditor
 from widgets.card_type_dialog import CardTypeDialog

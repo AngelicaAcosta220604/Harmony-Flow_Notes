@@ -1,7 +1,7 @@
 # views/topics_view.py
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QLineEdit, QFrame, QGridLayout, QMessageBox, QInputDialog,
+    QLineEdit, QFrame, QGridLayout,  QInputDialog,
     QComboBox, QScrollArea
 )
 from PySide6.QtCore import Qt, Signal

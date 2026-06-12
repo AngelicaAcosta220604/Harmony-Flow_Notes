@@ -2,8 +2,9 @@
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QFrame, QScrollArea, QMessageBox, QCheckBox, QGroupBox
+    QFrame, QScrollArea, QCheckBox, QGroupBox
 )
+from widgets.silent_message_box import QMessageBox
 from PySide6.QtCore import Qt, Signal
 from widgets.topic_tree_selector import TopicTreeSelector
 from controllers.review_controller import ReviewController
@@ -12,7 +13,9 @@ from controllers.review_controller import ReviewController
 class GlobalCardsView(QWidget):
     """Главная страница карточек: выбор тем, статистика, запуск повторения"""
 
-    start_review_requested = Signal(list, bool, bool)  # topic_ids, include_free, include_qa
+    start_review_requested = Signal(list, bool, bool, bool)  # topic_ids, include_free, include_qa
+
+    cards_updated = Signal()
 
     def __init__(self, flashcard_controller, topic_controller, parent=None):
         super().__init__(parent)
@@ -83,6 +86,10 @@ class GlobalCardsView(QWidget):
         type_layout.addWidget(self.include_free_cb)
         type_layout.addWidget(self.include_qa_cb)
         quick_layout.addLayout(type_layout)
+
+        self.skip_reviewed_cb = QCheckBox("🚫 Пропускать выученные карточки")
+        self.skip_reviewed_cb.setChecked(False)
+        quick_layout.addWidget(self.skip_reviewed_cb)
 
         self.start_btn = QPushButton("▶ Начать повторение")
         self.start_btn.setStyleSheet("""
@@ -167,6 +174,8 @@ class GlobalCardsView(QWidget):
         include_free = self.include_free_cb.isChecked()
         include_qa = self.include_qa_cb.isChecked()
 
+        skip_reviewed = self.skip_reviewed_cb.isChecked()
+
         if not include_free and not include_qa:
             QMessageBox.warning(self, "Нет типов", "Выберите хотя бы один тип карточек!")
             return
@@ -185,7 +194,7 @@ class GlobalCardsView(QWidget):
             return
 
         # Отправляем сигнал в MainWindow для переключения на окно повторения
-        self.start_review_requested.emit(selected_topics, include_free, include_qa)
+        self.start_review_requested.emit(selected_topics, include_free, include_qa, skip_reviewed)
 
     def refresh(self):
         """Обновляет всё (вызывается при переключении на вкладку)"""

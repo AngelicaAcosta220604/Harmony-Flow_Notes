@@ -2,8 +2,9 @@
 
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QStackedWidget, QLabel, QFrame, QMessageBox
+    QPushButton, QStackedWidget, QLabel, QFrame
 )
+from widgets.silent_message_box import QMessageBox
 from PySide6.QtCore import Qt
 
 from views.flashcards_view import FlashcardsView
@@ -111,6 +112,7 @@ class MainWindow(QMainWindow):
             topic_controller=self.topic_controller
         )
         self.global_cards_view.start_review_requested.connect(self.start_review_session)
+        self.global_cards_view.cards_updated.connect(self.refresh_global_cards)
 
         # Страница 6: Сессия повторения
         self.review_session_view = ReviewSessionView(
@@ -222,6 +224,8 @@ class MainWindow(QMainWindow):
         topic_view.back_requested.connect(lambda: self.stack.setCurrentIndex(1))
         topic_view.start_session_requested.connect(self._start_session_from_topic)
         topic_view.show_session_analytics.connect(self._show_session_analytics)
+        topic_view.cards_updated.connect(self.refresh_global_cards)
+        topic_view.topic_updated.connect(self.refresh_topic_combo)
         self.stack.addWidget(topic_view)
         self.stack.setCurrentWidget(topic_view)
 
@@ -237,7 +241,11 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentIndex(7)
         # TODO: передать session_id в AnalyticsView
 
-    def start_review_session(self, topic_ids: list, include_free: bool, include_qa: bool):
-        """Запускает сессию повторения"""
-        self.review_session_view.start_session(topic_ids, include_free, include_qa)
+    def start_review_session(self, topic_ids: list, include_free: bool, include_qa: bool, skip_reviewed: bool):
+        self.review_session_view.start_session(topic_ids, include_free, include_qa, skip_reviewed)
         self.stack.setCurrentWidget(self.review_session_view)
+
+    def refresh_global_cards(self):
+        """Обновляет глобальную страницу карточек"""
+        if hasattr(self, 'global_cards_view'):
+            self.global_cards_view.refresh()

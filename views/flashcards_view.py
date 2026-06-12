@@ -2,10 +2,10 @@
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-    QLabel, QScrollArea, QFrame, QMessageBox, QComboBox, QDialog
+    QLabel, QScrollArea, QFrame, QComboBox, QDialog
 )
 from PySide6.QtCore import Qt, Signal
-
+from widgets.silent_message_box import QMessageBox
 from widgets.card_type_dialog import CardTypeDialog
 
 class FlashcardsView(QWidget):
@@ -202,7 +202,26 @@ class FlashcardsView(QWidget):
             date_label.setStyleSheet("color: #AAA; font-size: 10px; border: none; padding: 0px; margin-top: 5px;")
             layout.addWidget(date_label)
 
+        if hasattr(card, 'review_status'):
+            status_text = ""
+            status_color = ""
+            if card.review_status == "new":
+                status_text = "🆕 Новое"
+                status_color = "#9E9E9E"
+            elif card.review_status == "learning":
+                status_text = "📖 В процессе"
+                status_color = "#FF9800"
+            elif card.review_status == "review":
+                status_text = "✅ Выучено"
+                status_color = "#4CAF50"
+
+            if status_text:
+                status_label = QLabel(status_text)
+                status_label.setStyleSheet(f"color: {status_color}; font-size: 10px; border: none; padding: 0px;")
+                layout.addWidget(status_label)
+
         return card_frame
+
 
     def create_card(self):
         """Открывает диалог создания новой карточки."""
@@ -226,6 +245,7 @@ class FlashcardsView(QWidget):
                                 )
                                 QMessageBox.information(self, "Готово", "Свободная карточка создана!")
                                 self.load_cards()
+                                self.cards_updated.emit()
                             else:
                                 return
                         else:

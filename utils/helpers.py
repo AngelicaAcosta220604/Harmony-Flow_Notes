@@ -147,3 +147,17 @@ def shorten(text: str, max_len: int = 40) -> str:
     if len(text) <= max_len:
         return text
     return text[:max_len - 3] + "..."
+
+# ---------------------------------------------------------
+# Время
+# ---------------------------------------------------------
+
+
+def now_local_iso() -> str:
+    """Возвращает текущее локальное время в ISO-формате с учётом часового пояса"""
+    from datetime import datetime
+    import time
+    # Получаем локальное время
+    local_timestamp = time.time()
+    local_dt = datetime.fromtimestamp(local_timestamp)
+    return local_dt.isoformat()

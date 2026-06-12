@@ -2,13 +2,12 @@
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-    QLabel, QScrollArea, QFrame, QComboBox, QDateEdit,
-    QMessageBox
+    QLabel, QScrollArea, QFrame, QComboBox, QDateEdit
 )
 from PySide6.QtCore import Qt, Signal, QDate
 from datetime import datetime, timedelta
 import matplotlib
-
+from widgets.silent_message_box import QMessageBox
 matplotlib.use('Qt5Agg')
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure

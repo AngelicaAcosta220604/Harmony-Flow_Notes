@@ -2,8 +2,9 @@
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QFrame, QMessageBox, QProgressBar, QSizePolicy, QSpacerItem
+    QFrame, QProgressBar, QSizePolicy, QSpacerItem, QScrollArea
 )
+from widgets.silent_message_box import QMessageBox
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 from controllers.review_controller import ReviewController
@@ -167,9 +168,9 @@ class ReviewSessionView(QWidget):
         # Изначально кнопки оценки скрыты
         self._set_rating_buttons_enabled(False)
 
-    def start_session(self, topic_ids: list, include_free: bool, include_qa: bool):
+    def start_session(self, topic_ids: list, include_free: bool, include_qa: bool, skip_reviewed: bool = False):
         """Начинает новую сессию повторения"""
-        cards = self.review_controller.start_session(topic_ids, include_free, include_qa)
+        cards = self.review_controller.start_session(topic_ids, include_free, include_qa, skip_reviewed)
 
         if not cards:
             QMessageBox.information(self, "Нет карточек", "Нет карточек для повторения в выбранных темах!")
@@ -233,6 +234,11 @@ class ReviewSessionView(QWidget):
 
     def _show_qa_card(self):
         """Показывает карточку Вопрос-Ответ"""
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QFrame.NoFrame)
+        scroll_area.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+
         # Вопрос
         question_content = QLabel(self.current_card.question)
         question_content.setWordWrap(True)
@@ -293,8 +299,7 @@ class ReviewSessionView(QWidget):
         self.card_layout.addWidget(self.answer_container)
         self.card_layout.addStretch()
 
-        # Кнопки оценки пока скрыты
-        self._set_rating_buttons_enabled(False)
+
 
     def _toggle_answer(self):
         """Показывает/скрывает ответ и включает кнопки оценки"""
