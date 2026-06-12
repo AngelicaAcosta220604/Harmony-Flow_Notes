@@ -7,6 +7,7 @@ from models.quick_note import QuickNote
 from datetime import datetime
 from PySide6.QtCore import QObject, Signal
 from controllers.topic_controller import TopicController
+from utils.local_time import now_local_iso
 
 
 class SessionController(QObject):
@@ -57,7 +58,7 @@ class SessionController(QObject):
                 (topic_id, f"Тема {topic_id}")
             )
 
-        now = datetime.now().isoformat()
+        now = now_local_iso()
 
         session_id = db.execute(
             "INSERT INTO sessions (topic_id, start_time, status) VALUES (?, ?, ?)",
@@ -104,7 +105,7 @@ class SessionController(QObject):
         if not session:
             return
 
-        end_time = datetime.now().isoformat()
+        end_time = now_local_iso()
 
         if duration is not None:
             db.execute(
@@ -163,7 +164,7 @@ class SessionController(QObject):
         if self.ping_manager and self.is_active:
             self.ping_manager.reset_idle()
 
-        now = datetime.now().isoformat()
+        now = now_local_iso()
 
         return db.execute(
             "INSERT INTO quick_notes (session_id, topic_id, content, created_at) VALUES (?, ?, ?, ?)",

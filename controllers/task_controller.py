@@ -2,6 +2,8 @@ from database.db_manager import db
 from models.task import Task
 from datetime import datetime
 from controllers.topic_controller import TopicController
+from utils.local_time import now_local_iso
+
 
 class TaskController:
 
@@ -10,7 +12,7 @@ class TaskController:
             TopicController().update_timestamp(topic_id)
 
     def create_task(self, title: str, description: str = "", topic_id: int = None, deadline: str = None) -> int:
-        now = datetime.now().isoformat()
+        now = now_local_iso()
         result = db.execute(
             "INSERT INTO tasks (title, description, topic_id, deadline, status, created_at) VALUES (?, ?, ?, ?, ?, ?)",
             (title, description, topic_id, deadline, 'active', now)
@@ -36,7 +38,7 @@ class TaskController:
 
         db.execute(
             "UPDATE tasks SET status = ?, completed_at = ? WHERE id = ?",
-            (status, datetime.now().isoformat() if status == 'completed' else None, task_id)
+            (status, now_local_iso() if status == 'completed' else None, task_id)
         )
 
         self._update_topic_timestamp(topic_id)
