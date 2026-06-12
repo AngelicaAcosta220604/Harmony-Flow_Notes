@@ -68,6 +68,39 @@ class DatabaseManager:
                     FOREIGN KEY (source_note_id) REFERENCES notes (id)
                 )
             """)
+            cursor.execute("PRAGMA table_info(flashcards)")
+            existing_columns = [col[1] for col in cursor.fetchall()]
+
+            if 'review_status' not in existing_columns:
+                cursor.execute("ALTER TABLE flashcards ADD COLUMN review_status TEXT DEFAULT 'new'")
+            if 'consecutive_correct' not in existing_columns:
+                cursor.execute("ALTER TABLE flashcards ADD COLUMN consecutive_correct INTEGER DEFAULT 0")
+            if 'last_reviewed' not in existing_columns:
+                cursor.execute("ALTER TABLE flashcards ADD COLUMN last_reviewed DATETIME")
+            if 'is_active' not in existing_columns:
+                cursor.execute("ALTER TABLE flashcards ADD COLUMN is_active INTEGER DEFAULT 1")
+
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS review_sessions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_date DATETIME NOT NULL,
+                    total_cards INTEGER DEFAULT 0,
+                    completed_cards INTEGER DEFAULT 0,
+                    duration_minutes INTEGER DEFAULT 0
+                )
+            """)
+
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS review_answers (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id INTEGER NOT NULL,
+                    card_id INTEGER NOT NULL,
+                    rating INTEGER NOT NULL,
+                    response_time_seconds INTEGER DEFAULT 0,
+                    FOREIGN KEY (session_id) REFERENCES review_sessions(id) ON DELETE CASCADE,
+                    FOREIGN KEY (card_id) REFERENCES flashcards(id) ON DELETE CASCADE
+                )
+            """)
 
             # tasks (задачи)
             cursor.execute("""
@@ -136,11 +169,7 @@ class DatabaseManager:
             # database/db_manager.py
             # В методе _init_tables() после создания всех таблиц добавьте:
 
-            try:
-                cursor.execute("ALTER TABLE flashcards ADD COLUMN source_note_id INTEGER")
-                cursor.execute("ALTER TABLE flashcards ADD COLUMN source_note_id REFERENCES notes(id)")
-            except:
-                pass  # колонка уже существует
+
 
             # Добавляем настройки по умолчанию, если их нет
             default_settings = [
