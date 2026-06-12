@@ -2,8 +2,9 @@
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QFrame, QScrollArea, QCheckBox, QGroupBox, QMessageBox
+    QFrame, QScrollArea, QCheckBox, QGroupBox
 )
+from widgets.silent_dialog import SilentMessageBox
 from PySide6.QtCore import Qt, Signal
 from widgets.topic_tree_selector import TopicTreeSelector
 from controllers.review_controller import ReviewController
@@ -167,7 +168,7 @@ class GlobalCardsView(QWidget):
         selected_topics = self.tree_selector.get_selected_topic_ids()
 
         if not selected_topics:
-            QMessageBox.warning(self, "Нет тем", "Выберите хотя бы одну тему для повторения!")
+            SilentMessageBox.warning(self, "Нет тем", "Выберите хотя бы одну тему для повторения!")
             return
 
         include_free = self.include_free_cb.isChecked()
@@ -176,7 +177,7 @@ class GlobalCardsView(QWidget):
         skip_reviewed = self.skip_reviewed_cb.isChecked()
 
         if not include_free and not include_qa:
-            QMessageBox.warning(self, "Нет типов", "Выберите хотя бы один тип карточек!")
+            SilentMessageBox.warning(self, "Нет типов", "Выберите хотя бы один тип карточек!")
             return
 
         # Проверяем, есть ли карточки для повторения
@@ -185,8 +186,7 @@ class GlobalCardsView(QWidget):
         )
 
         if not cards:
-            QMessageBox.information(
-                self, "Нет карточек",
+            SilentMessageBox.information(self, "Нет карточек",
                 "В выбранных темах нет активных карточек для повторения!\n\n"
                 "Создайте карточки через раздел 'Темы' → выберите тему → 'Карточки'."
             )

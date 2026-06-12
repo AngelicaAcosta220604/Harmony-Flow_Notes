@@ -1,25 +1,25 @@
 # widgets/silent_dialog.py
 
-from PySide6.QtWidgets import QMessageBox, QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayout
+from PySide6.QtWidgets import QMessageBox, QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayout, QLineEdit
 from PySide6.QtCore import Qt
 
 
 class SilentMessageBox(QDialog):
-    """Модальное окно без звука"""
+    """Модальное окно без звука, совместимое с QMessageBox API"""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setModal(True)
-        self.setMinimumWidth(350)
-        self.setMinimumHeight(150)
+        self.setMinimumWidth(400)
+        self.setMinimumHeight(180)
 
         layout = QVBoxLayout(self)
         layout.setSpacing(15)
-        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setContentsMargins(25, 20, 25, 20)
 
         self.icon_label = QLabel()
         self.icon_label.setAlignment(Qt.AlignCenter)
-        self.icon_label.setStyleSheet("font-size: 28px;")
+        self.icon_label.setStyleSheet("font-size: 32px;")
         layout.addWidget(self.icon_label)
 
         self.text_label = QLabel()
@@ -36,14 +36,15 @@ class SilentMessageBox(QDialog):
             QDialog {
                 background-color: white;
                 border: 1px solid #CCC;
-                border-radius: 8px;
+                border-radius: 10px;
             }
             QPushButton {
-                padding: 5px 12px;
+                padding: 6px 16px;
                 border: 1px solid #CCC;
-                border-radius: 4px;
+                border-radius: 5px;
                 background-color: #F0F0F0;
-                min-width: 70px;
+                min-width: 80px;
+                font-size: 12px;
             }
             QPushButton:hover {
                 background-color: #E0E0E0;
@@ -79,20 +80,86 @@ class SilentMessageBox(QDialog):
         return dialog.exec()
 
     @staticmethod
-    def question(parent, title, text):
+    def question(parent, title, text, buttons=QMessageBox.Yes | QMessageBox.No, defaultButton=QMessageBox.No):
+        """
+        Бесшумный аналог QMessageBox.question.
+        Возвращает QMessageBox.Yes или QMessageBox.No.
+        Параметры buttons и defaultButton сохраняются для совместимости, но игнорируются,
+        так как всегда показываются кнопки "Да" и "Нет".
+        """
         dialog = SilentMessageBox(parent)
         dialog.setWindowTitle(title)
         dialog.icon_label.setText("❓")
         dialog.text_label.setText(text)
 
+        # Переменная для хранения результата
+        result = QMessageBox.No
+
+        def set_yes():
+            nonlocal result
+            result = QMessageBox.Yes
+            dialog.accept()
+
+        def set_no():
+            nonlocal result
+            result = QMessageBox.No
+            dialog.accept()
+
         yes_btn = QPushButton("Да")
         no_btn = QPushButton("Нет")
 
-        yes_btn.clicked.connect(lambda: dialog.done(QMessageBox.Yes))
-        no_btn.clicked.connect(lambda: dialog.done(QMessageBox.No))
+        yes_btn.clicked.connect(set_yes)
+        no_btn.clicked.connect(set_no)
 
         dialog.button_layout.addWidget(yes_btn)
         dialog.button_layout.addWidget(no_btn)
         dialog.button_layout.addStretch()
 
-        return dialog.exec()
+        dialog.exec()
+        return result
+
+
+class SilentDialog(QDialog):
+    """Базовый бесшумный диалог"""
+    def __init__(self, parent=None, f=Qt.WindowFlags()):
+        super().__init__(parent, f)
+        self.setModal(True)
+        self.setStyleSheet("""
+            QDialog {
+                background-color: white;
+                border: 1px solid #CCC;
+                border-radius: 10px;
+            }
+        """)
+
+
+class SilentInputDialog(SilentDialog):
+    """Бесшумный аналог QInputDialog"""
+
+    @staticmethod
+    def getText(parent, title, label, text=""):
+        dialog = SilentDialog(parent)
+        dialog.setWindowTitle(title)
+        dialog.setMinimumWidth(400)
+
+        layout = QVBoxLayout(dialog)
+        layout.addWidget(QLabel(label))
+
+        line_edit = QLineEdit(text)
+        layout.addWidget(line_edit)
+
+        btn_layout = QHBoxLayout()
+        ok_btn = QPushButton("OK")
+        cancel_btn = QPushButton("Отмена")
+
+        ok_btn.clicked.connect(dialog.accept)
+        cancel_btn.clicked.connect(dialog.reject)
+
+        btn_layout.addStretch()
+        btn_layout.addWidget(ok_btn)
+        btn_layout.addWidget(cancel_btn)
+        layout.addLayout(btn_layout)
+
+        if dialog.exec() == QDialog.Accepted:
+            return line_edit.text(), True
+        return "", False

@@ -2,8 +2,9 @@
 
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QStackedWidget, QLabel, QFrame, QMessageBox
+    QPushButton, QStackedWidget, QLabel, QFrame,
 )
+from widgets.silent_dialog import SilentMessageBox
 from PySide6.QtCore import Qt
 
 from views.flashcards_view import FlashcardsView
@@ -188,7 +189,7 @@ class MainWindow(QMainWindow):
     def start_session_from_setup(self):
         current_index = self.session_topic_combo.currentIndex()
         if current_index < 0:
-            QMessageBox.warning(self, "Ошибка", "Сначала создайте хотя бы одну тему!")
+            SilentMessageBox.warning(self, "Ошибка", "Сначала создайте хотя бы одну тему!")
             return
 
         topic_id = self.session_topic_combo.currentData()

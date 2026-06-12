@@ -7,6 +7,9 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal, QDate
 from datetime import datetime, timedelta
 import matplotlib
+
+from services import TimeService
+
 matplotlib.use('Qt5Agg')
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
@@ -318,7 +321,7 @@ class AnalyticsView(QWidget):
         info_frame.setStyleSheet("background-color: #F5F5F5; border-radius: 8px; padding: 15px;")
         info_layout = QVBoxLayout(info_frame)
 
-        date_str = datetime.fromisoformat(session.start_time).strftime("%d.%m.%Y %H:%M") if session.start_time else "—"
+        date_str = TimeService.format_display(session.start_time) if session.start_time else "—"
         info_layout.addWidget(QLabel(f"📅 Сессия от {date_str}"))
         info_layout.addWidget(QLabel(
             f"⏱ Длительность: {session.duration_minutes} минут" if session.duration_minutes else "⏱ Длительность: —"))

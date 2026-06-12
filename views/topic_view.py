@@ -5,11 +5,13 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QTextEdit, QPushButton, QInputDialog,
     QFrame, QStackedWidget, QScrollArea, QSizePolicy,
-    QLineEdit, QComboBox, QMessageBox  # <-- ОБА ДОЛЖНЫ БЫТЬ ЗДЕСЬ
+    QLineEdit, QComboBox, QMessageBox,  # <-- ОБА ДОЛЖНЫ БЫТЬ ЗДЕСЬ
 )
+from widgets.silent_dialog import SilentMessageBox, SilentInputDialog
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 
+from services import TimeService
 from views.note_editor_view import NoteEditorView
 from views.flashcards_view import FlashcardsView
 from views.tasks_view import TasksView
@@ -56,7 +58,7 @@ class TopicView(QWidget):
         top_bar.addStretch()
 
         if hasattr(self.topic, 'updated_at') and self.topic.updated_at:
-            date_label = QLabel(f"Изменено: {self.topic.updated_at[:16]}")
+            date_label = QLabel(f"Изменено: {TimeService.format_display(self.topic.updated_at)}")
             date_label.setStyleSheet("color: gray; font-size: 11px;")
             top_bar.addWidget(date_label)
 
@@ -448,7 +450,7 @@ class TopicView(QWidget):
 
         # Дата
         if note.updated_at:
-            date_label = QLabel(note.updated_at[:16])
+            date_label = QLabel(TimeService.format_display(note.updated_at))
             date_label.setStyleSheet("color: gray; font-size: 10px;")
             layout.addWidget(date_label)
 
@@ -479,14 +481,14 @@ class TopicView(QWidget):
         """Сохраняет содержимое редактора в БД"""
         if not self.current_note_id:
             return
-        content = self.edit_editor.toPlainText()
+        content = self.edit_view_page.editor.to_html()  # или toPlainText()
         self.note_controller.update_note(self.current_note_id, content=content)
 
     # ==================== ОПЕРАЦИИ С ЗАПИСЯМИ ====================
 
     def _rename_note(self, note_id: int, old_title: str):
         """Переименовывает заметку"""
-        new_title, ok = QInputDialog.getText(self, "Переименовать", "Новое название записи:", text=old_title)
+        new_title, ok = SilentInputDialog.getText(self, "Переименовать", "Новое название записи:", text=old_title)
         if ok and new_title.strip():
             self.note_controller.update_note(note_id, title=new_title.strip())
             self._load_notes_list()
@@ -496,11 +498,9 @@ class TopicView(QWidget):
 
     def _delete_note(self, note_id: int):
         """Удаляет заметку"""
-        reply = QMessageBox.question(
-            self, "Удалить запись",
-            "Вы уверены, что хотите удалить эту запись?",
-            QMessageBox.Yes | QMessageBox.No
-        )
+        reply = SilentMessageBox.question(self, "Удалить запись",
+                                          "Вы уверены, что хотите удалить эту запись?"
+                                          )
         if reply == QMessageBox.Yes:
             self.note_controller.delete_note(note_id)
             self.topic_updated.emit()
@@ -512,13 +512,13 @@ class TopicView(QWidget):
 
     def _create_new_note(self):
         """Создаёт новую запись и открывает её в режиме редактирования"""
-        title, ok = QInputDialog.getText(self, "Новая запись", "Введите название записи:")
+        title, ok = SilentInputDialog.getText(self, "Новая запись", "Введите название записи:")
 
         if not ok:
             return
 
         if not title.strip():
-            QMessageBox.warning(self, "Ошибка", "Название записи не может быть пустым!")
+            SilentMessageBox.warning(self, "Ошибка", "Название записи не может быть пустым!")
             return
 
         note_id = self.note_controller.create_note(self.topic_id, title.strip(), "")

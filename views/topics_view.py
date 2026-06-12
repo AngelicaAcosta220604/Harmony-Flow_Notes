@@ -1,11 +1,13 @@
 # views/topics_view.py
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QLineEdit, QFrame, QGridLayout,  QInputDialog,
+    QLineEdit, QFrame, QGridLayout,
     QComboBox, QScrollArea
 )
+from widgets.silent_dialog import SilentInputDialog
 from PySide6.QtCore import Qt, Signal
 from controllers.topic_controller import TopicController
+from services import TimeService
 
 
 class TopicsView(QWidget):
@@ -171,7 +173,8 @@ class TopicsView(QWidget):
         layout.addWidget(title_label)
 
         if topic.created_at:
-            date_label = QLabel(f"📅 Создано: {topic.created_at[:16]}")
+            from services.time_service import TimeService
+            date_label = QLabel(f"📅 Создано: {TimeService.format_display(topic.created_at)}")
             date_label.setStyleSheet("color: gray; font-size: 11px;")
             layout.addWidget(date_label)
 
@@ -205,7 +208,7 @@ class TopicsView(QWidget):
         layout.addWidget(title_label)
 
         if topic.created_at:
-            date_label = QLabel(f"📅 {topic.created_at[:16]}")
+            date_label = QLabel(f"📅 {TimeService.format_display(topic.created_at)}")
             date_label.setStyleSheet("color: gray; font-size: 11px;")
             layout.addWidget(date_label)
 
@@ -240,13 +243,13 @@ class TopicsView(QWidget):
 
     # ==================== СОЗДАНИЕ ====================
     def _create_folder(self):
-        name, ok = QInputDialog.getText(self, "Новая папка", "Введите название папки:")
+        name, ok = SilentInputDialog.getText(self, "Новая папка", "Введите название папки:")
         if ok and name.strip():
             self.topic_controller.add_topic(name.strip(), parent_id=None, type="folder")
             self._load_topics()
 
     def _create_topic(self):
-        name, ok = QInputDialog.getText(self, "Новая тема", "Введите название темы:")
+        name, ok = SilentInputDialog.getText(self, "Новая тема", "Введите название темы:")
         if ok and name.strip():
             self.topic_controller.add_topic(name.strip(), parent_id=None, type="topic")
             self._load_topics()

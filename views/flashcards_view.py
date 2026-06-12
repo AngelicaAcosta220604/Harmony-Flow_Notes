@@ -2,9 +2,13 @@
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-    QLabel, QScrollArea, QFrame, QComboBox, QDialog, QMessageBox
+    QLabel, QScrollArea, QFrame, QComboBox, QDialog, QMessageBox,
 )
+from widgets.silent_dialog import SilentMessageBox
 from PySide6.QtCore import Qt, Signal
+
+from utils.local_time import format_display
+from services.time_service import TimeService
 from widgets.card_type_dialog import CardTypeDialog
 
 class FlashcardsView(QWidget):
@@ -190,11 +194,8 @@ class FlashcardsView(QWidget):
             layout.addWidget(question_label)
 
         # ========== Дата (простая строка, без обводки) ==========
-        date_str = ""
-        if hasattr(card, 'updated_at') and card.updated_at:
-            date_str = card.updated_at[:16]
-        elif hasattr(card, 'created_at') and card.created_at:
-            date_str = card.created_at[:16]
+
+        date_str = TimeService.format_display(card.updated_at or card.created_at)
 
         if date_str:
             date_label = QLabel(date_str)
@@ -221,7 +222,6 @@ class FlashcardsView(QWidget):
 
         return card_frame
 
-
     def create_card(self):
         """Открывает диалог создания новой карточки."""
         dialog = CardTypeDialog("", self)
@@ -242,7 +242,7 @@ class FlashcardsView(QWidget):
                                     content=content,
                                     source_note_id=None
                                 )
-                                QMessageBox.information(self, "Готово", "Свободная карточка создана!")
+                                SilentMessageBox.information(self, "Готово", "Свободная карточка создана!")
                                 self.load_cards()
                                 self.cards_updated.emit()
                             else:
@@ -256,10 +256,10 @@ class FlashcardsView(QWidget):
                             content=content,
                             source_note_id=None
                         )
-                        QMessageBox.information(self, "Готово", "Свободная карточка создана!")
+                        SilentMessageBox.information(self, "Готово", "Свободная карточка создана!")
                         self.load_cards()
                 else:
-                    QMessageBox.warning(self, "Ошибка", "Содержание не может быть пустым")
+                    SilentMessageBox.warning(self, "Ошибка", "Содержание не может быть пустым")
 
             else:  # qa (вопрос-ответ)
                 question = dialog.get_question()
@@ -279,7 +279,7 @@ class FlashcardsView(QWidget):
                                     answer=answer,
                                     source_note_id=None
                                 )
-                                QMessageBox.information(self, "Готово", "Карточка Вопрос-Ответ создана!")
+                                SilentMessageBox.information(self, "Готово", "Карточка Вопрос-Ответ создана!")
                                 self.load_cards()
                             else:
                                 return
@@ -293,19 +293,16 @@ class FlashcardsView(QWidget):
                             answer=answer,
                             source_note_id=None
                         )
-                        QMessageBox.information(self, "Готово", "Карточка Вопрос-Ответ создана!")
+                        SilentMessageBox.information(self, "Готово", "Карточка Вопрос-Ответ создана!")
                         self.load_cards()
                 elif question and not answer:
                     # Нет ответа — спрашиваем пользователя
-                    reply = QMessageBox.question(
-                        self,
-                        "Нет ответа",
-                        "Вы не заполнили ответ.\n\n"
-                        "• Нажмите «Да» — чтобы сохранить как свободную карточку\n"
-                        "• Нажмите «Нет» — чтобы продолжить редактирование",
-                        QMessageBox.Yes | QMessageBox.No,
-                        QMessageBox.No
-                    )
+                    reply = SilentMessageBox.question(self,
+                                                      "Нет ответа",
+                                                      "Вы не заполнили ответ.\n\n"
+                                                      "• Нажмите «Да» — чтобы сохранить как свободную карточку\n"
+                                                      "• Нажмите «Нет» — чтобы продолжить редактирование"
+                                                      )
                     if reply == QMessageBox.Yes:
                         # Сохраняем вопрос как свободную карточку
                         content = question
@@ -320,7 +317,7 @@ class FlashcardsView(QWidget):
                                         content=content,
                                         source_note_id=None
                                     )
-                                    QMessageBox.information(self, "Готово", "Карточка сохранена как свободная!")
+                                    SilentMessageBox.information(self, "Готово", "Карточка сохранена как свободная!")
                                     self.load_cards()
                         else:
                             self.flashcard_controller.create_free_card(
@@ -328,11 +325,11 @@ class FlashcardsView(QWidget):
                                 content=content,
                                 source_note_id=None
                             )
-                            QMessageBox.information(self, "Готово", "Карточка сохранена как свободная!")
+                            SilentMessageBox.information(self, "Готово", "Карточка сохранена как свободная!")
                             self.load_cards()
                     # Если reply == QMessageBox.No — ничего не делаем, диалог остаётся открытым
                 else:
-                    QMessageBox.warning(self, "Ошибка", "Заполните хотя бы вопрос")
+                    SilentMessageBox.warning(self, "Ошибка", "Заполните хотя бы вопрос")
 
     def edit_card(self, card_id: int):
         """Редактирование существующей карточки."""
@@ -347,10 +344,12 @@ class FlashcardsView(QWidget):
                 new_content = dialog.get_free_content()
                 if new_content:
                     self.flashcard_controller.update_card(card_id, content=new_content)
-                    QMessageBox.information(self, "Готово", "Карточка обновлена!")
+                    SilentMessageBox.information(self, "Готово",
+                                                 "Карточка обновлена!")  # ← QMessageBox → SilentMessageBox
                     self.load_cards()
                 else:
-                    QMessageBox.warning(self, "Ошибка", "Содержание не может быть пустым")
+                    SilentMessageBox.warning(self, "Ошибка",
+                                             "Содержание не может быть пустым")  # ← QMessageBox → SilentMessageBox
         else:  # question-answer
             dialog = CardTypeDialog("", self)
             dialog._select_type("qa")
@@ -361,17 +360,18 @@ class FlashcardsView(QWidget):
                 new_answer = dialog.get_answer()
                 if new_question and new_answer:
                     self.flashcard_controller.update_card(card_id, question=new_question, answer=new_answer)
-                    QMessageBox.information(self, "Готово", "Карточка обновлена!")
+                    SilentMessageBox.information(self, "Готово",
+                                                 "Карточка обновлена!")  # ← QMessageBox → SilentMessageBox
                     self.load_cards()
                 else:
-                    QMessageBox.warning(self, "Ошибка", "Заполните и вопрос, и ответ")
+                    SilentMessageBox.warning(self, "Ошибка",
+                                             "Заполните и вопрос, и ответ")  # ← QMessageBox → SilentMessageBox
 
     def delete_card(self, card_id: int):
         """Удаляет карточку после подтверждения."""
-        reply = QMessageBox.question(
+        reply = SilentMessageBox.question(
             self, "Удаление",
-            "Вы уверены, что хотите удалить эту карточку?",
-            QMessageBox.Yes | QMessageBox.No
+            "Вы уверены, что хотите удалить эту карточку?"
         )
         if reply == QMessageBox.Yes:
             self.flashcard_controller.delete_card(card_id)

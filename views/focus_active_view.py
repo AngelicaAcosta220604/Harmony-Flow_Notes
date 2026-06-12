@@ -2,8 +2,9 @@
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QMessageBox
+    QFrame, QMessageBox,
 )
+from widgets.silent_dialog import SilentMessageBox
 from PySide6.QtCore import Qt, QTimer, Signal
 from widgets.state_sliders import StateSliders
 from widgets.custom_timer import CustomTimer
@@ -244,8 +245,7 @@ class FocusActiveView(QWidget):
 
         self.session_controller.end_session(self.current_session_id, duration=duration_minutes)
 
-        QMessageBox.information(
-            self,
+        SilentMessageBox.information(self,
             "Сессия завершена",
             f"Сессия по теме '{self.current_topic_name}' завершена!\n\n"
             f"⏱ Длительность: {duration_minutes} минут"
@@ -257,13 +257,10 @@ class FocusActiveView(QWidget):
 
     def confirm_exit(self):
         """Подтверждение выхода"""
-        reply = QMessageBox.question(
-            self,
-            "Выйти из сессии?",
-            "Прогресс этой сессии не сохранится. Вы уверены?",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
+        reply = SilentMessageBox.question(self,
+                                          "Выйти из сессии?",
+                                          "Прогресс этой сессии не сохранится. Вы уверены?"
+                                          )
 
         if reply == QMessageBox.Yes:
             if self.current_session_id:

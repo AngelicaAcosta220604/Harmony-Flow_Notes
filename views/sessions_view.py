@@ -2,10 +2,13 @@
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-    QLabel, QScrollArea, QFrame, QMessageBox
+    QLabel, QScrollArea, QFrame, QMessageBox,
 )
+from widgets.silent_dialog import SilentMessageBox
 from PySide6.QtCore import Qt, Signal
 from datetime import datetime
+
+from services import TimeService
 
 
 class SessionsView(QWidget):
@@ -137,7 +140,8 @@ class SessionsView(QWidget):
         expand_btn.clicked.connect(lambda checked, sid=session.id, btn=expand_btn: self._toggle_expand(sid, btn))
         header_layout.addWidget(expand_btn)
 
-        date_label = QLabel("⏱ " + self._format_datetime(session.start_time))
+        from services.time_service import TimeService
+        date_label = QLabel(f"⏱ {TimeService.format_display(session.start_time)}")
         date_label.setStyleSheet("font-size: 13px; font-weight: bold;")
         header_layout.addWidget(date_label)
 
@@ -263,8 +267,7 @@ class SessionsView(QWidget):
 
         if note.created_at:
             try:
-                dt = datetime.fromisoformat(note.created_at)
-                date_label = QLabel(f"📌 {dt.strftime('%d.%m.%Y %H:%M')}")
+                date_label = QLabel(f"📌 {TimeService.format_display(note.created_at)}")
                 date_label.setStyleSheet("color: #888; font-size: 10px;")
                 layout.addWidget(date_label)
             except:
@@ -299,12 +302,16 @@ class SessionsView(QWidget):
         if not start_str:
             return ""
         try:
-            start = datetime.fromisoformat(start_str)
+            from services.time_service import TimeService
+            start_display = TimeService.format_display(start_str)  # дата и время
+            # Или только время:
+            start_time = TimeService.format_display(start_str).split()[-1]  # последняя часть - время
+
             if end_str:
-                end = datetime.fromisoformat(end_str)
-                return f"{start.strftime('%H:%M')} - {end.strftime('%H:%M')}"
+                end_time = TimeService.format_display(end_str).split()[-1]
+                return f"{start_time} - {end_time}"
             else:
-                return f"Начата в {start.strftime('%H:%M')}"
+                return f"Начата в {start_time}"
         except:
             return start_str
 
@@ -319,16 +326,14 @@ class SessionsView(QWidget):
         return status_map.get(status, "❓ " + status)
 
     def _delete_session(self, session_id: int):
-        reply = QMessageBox.question(
-            self, "Удаление сессии",
-            "Вы уверены, что хотите удалить эту сессию?\n"
-            "Все данные будут удалены безвозвратно.",
-            QMessageBox.Yes | QMessageBox.No
-        )
+        reply = SilentMessageBox.question(self, "Удаление сессии",
+                                          "Вы уверены, что хотите удалить эту сессию?\n"
+                                          "Все данные будут удалены безвозвратно."
+                                          )
         if reply == QMessageBox.Yes:
             self.session_controller.delete_session(session_id)
             self.load_sessions()
-            QMessageBox.information(self, "Готово", "Сессия удалена")
+            SilentMessageBox.information(self, "Готово", "Сессия удалена")
 
     def _on_start_session(self):
         self.start_session_requested.emit(self.topic_id, self.topic_name)

@@ -3,10 +3,13 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QScrollArea, QFrame, QComboBox,
-    QCheckBox, QDateEdit, QMessageBox
+    QCheckBox, QDateEdit,
 )
+from widgets.silent_dialog import SilentMessageBox
 from PySide6.QtCore import Qt, Signal, QDate, QDateTime
 from datetime import datetime, timedelta
+
+from services import TimeService
 from widgets.task_dialog import TaskDialog
 
 
@@ -455,8 +458,7 @@ class TasksView(QWidget):
         if not is_completed and task.deadline:
             try:
                 deadline_dt = datetime.fromisoformat(task.deadline)
-                deadline_text = f"📅 {deadline_dt.strftime('%d.%m.%Y %H:%M')}"
-                deadline_label = QLabel(deadline_text)
+                deadline_label = QLabel(f"📅 {TimeService.format_display(task.deadline)}")
 
                 if deadline_status == "overdue":
                     deadline_label.setStyleSheet("color: #ff4444; font-size: 11px; font-weight: bold;")
@@ -522,7 +524,7 @@ class TasksView(QWidget):
         if task.created_at:
             try:
                 created_dt = datetime.fromisoformat(task.created_at)
-                created_label = QLabel(f"📝 Создана: {created_dt.strftime('%d.%m.%Y %H:%M')}")
+                created_label = QLabel(f"📝 Создана: {TimeService.format_display(task.created_at)}")
                 if is_completed:
                     created_label.setStyleSheet("color: #aaa; font-size: 10px; margin-left: 25px;")
                 else:
@@ -555,7 +557,7 @@ class TasksView(QWidget):
                 )
                 self.load_tasks()
                 self.tasks_updated.emit()
-                QMessageBox.information(self, "Готово", f"Задача «{title}» создана!")
+                SilentMessageBox.information(self, "Готово", f"Задача «{title}» создана!")
 
     def edit_task(self, task_id: int):
         """Редактирует задачу."""
@@ -590,12 +592,11 @@ class TasksView(QWidget):
                 )
                 self.load_tasks()
                 self.tasks_updated.emit()
-                QMessageBox.information(self, "Готово", "Задача обновлена!")
+                SilentMessageBox.information(self, "Готово", "Задача обновлена!")
 
     def delete_task(self, task_id: int):
         """Удаляет задачу."""
-        reply = QMessageBox.question(
-            self, "Удаление",
+        reply = SilentMessageBox.question(self, "Удаление",
             "Вы уверены, что хотите удалить эту задачу?",
             QMessageBox.Yes | QMessageBox.No
         )

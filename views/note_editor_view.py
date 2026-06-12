@@ -1,8 +1,10 @@
 # views/note_editor_view.py
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QDialog, QMessageBox  # QDialog добавлен!
+    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QDialog,   # QDialog добавлен!
 )
+from widgets.silent_dialog import SilentMessageBox
+
 from PySide6.QtCore import Qt, Signal, QTimer
 from widgets.rich_text_editor import RichTextEditor
 from widgets.card_type_dialog import CardTypeDialog
@@ -95,7 +97,7 @@ class NoteEditorView(QWidget):
         """Создаёт карточку из выделенного текста (немодальный диалог)"""
         selected = self.editor.editor.textCursor().selectedText()
         if not selected:
-            QMessageBox.information(self, "Нет выделения", "Выделите текст для создания карточки")
+            SilentMessageBox.information(self, "Нет выделения", "Выделите текст для создания карточки")
             return
 
         # Создаём НЕмодальный диалог
@@ -114,7 +116,7 @@ class NoteEditorView(QWidget):
                         content=content,
                         source_note_id=self.current_note_id
                     )
-                    QMessageBox.information(self, "Готово", "Свободная карточка создана!")
+                    SilentMessageBox.information(self, "Готово", "Свободная карточка создана!")
             else:  # qa
                 question = self.card_dialog.get_question()
                 answer = self.card_dialog.get_answer()
@@ -126,7 +128,7 @@ class NoteEditorView(QWidget):
                         answer=answer,
                         source_note_id=self.current_note_id
                     )
-                    QMessageBox.information(self, "Готово", "Карточка Вопрос-Ответ создана!")
+                    SilentMessageBox.information(self, "Готово", "Карточка Вопрос-Ответ создана!")
                 elif question and not answer:
                     # Сохраняем как свободную карточку
                     self.flashcard_controller.create_free_card(
@@ -134,7 +136,7 @@ class NoteEditorView(QWidget):
                         content=question,
                         source_note_id=self.current_note_id
                     )
-                    QMessageBox.information(self, "Готово", "Сохранено как свободная карточка")
+                    SilentMessageBox.information(self, "Готово", "Сохранено как свободная карточка")
 
         if self.card_dialog:
             self.card_dialog.deleteLater()
@@ -146,7 +148,7 @@ class NoteEditorView(QWidget):
         """Создаёт задачу из выделенного текста"""
         selected = self.editor.editor.textCursor().selectedText()
         if not selected:
-            QMessageBox.information(self, "Нет выделения", "Выделите текст для создания задачи")
+            SilentMessageBox.information(self, "Нет выделения", "Выделите текст для создания задачи")
             return
 
         dialog = TaskDialog(self)
@@ -164,6 +166,6 @@ class NoteEditorView(QWidget):
                     topic_id=self.current_topic_id,
                     deadline=deadline
                 )
-                QMessageBox.information(self, "Готово", f"Задача «{title}» создана!")
+                SilentMessageBox.information(self, "Готово", f"Задача «{title}» создана!")
             else:
-                QMessageBox.warning(self, "Ошибка", "Название задачи не может быть пустым")
+                SilentMessageBox.warning(self, "Ошибка", "Название задачи не может быть пустым")

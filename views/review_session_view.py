@@ -2,8 +2,9 @@
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QFrame, QProgressBar, QSizePolicy, QSpacerItem, QScrollArea, QMessageBox
+    QFrame, QProgressBar, QSizePolicy, QSpacerItem, QScrollArea, QMessageBox,
 )
+from widgets.silent_dialog import SilentMessageBox
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 from controllers.review_controller import ReviewController
@@ -172,7 +173,7 @@ class ReviewSessionView(QWidget):
         cards = self.review_controller.start_session(topic_ids, include_free, include_qa, skip_reviewed)
 
         if not cards:
-            QMessageBox.information(self, "Нет карточек", "Нет карточек для повторения в выбранных темах!")
+            SilentMessageBox.information(self, "Нет карточек", "Нет карточек для повторения в выбранных темах!")
             self.back_to_cards.emit()
             return
 
@@ -346,8 +347,7 @@ class ReviewSessionView(QWidget):
 
         stats = self.review_controller.get_progress()
 
-        QMessageBox.information(
-            self,
+        SilentMessageBox.information(self,
             "Сессия завершена!",
             f"🎉 Вы повторили {stats['completed']} из {stats['total']} карточек!\n\n"
             f"Нажмите «OK», чтобы вернуться к выбору тем."
@@ -358,14 +358,11 @@ class ReviewSessionView(QWidget):
     def _confirm_exit(self):
         """Подтверждение выхода из сессии"""
         if not self.review_controller.is_session_complete():
-            reply = QMessageBox.question(
-                self,
-                "Выйти из сессии?",
-                "Вы не завершили повторение. Весь прогресс будет потерян.\n\n"
-                "Вы уверены?",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No
-            )
+            reply = SilentMessageBox.question(self,
+                                              "Выйти из сессии?",
+                                              "Вы не завершили повторение. Весь прогресс будет потерян.\n\n"
+                                              "Вы уверены?"
+                                              )
             if reply != QMessageBox.Yes:
                 return
 
