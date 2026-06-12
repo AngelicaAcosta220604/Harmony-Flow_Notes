@@ -118,7 +118,7 @@ class FlashcardsView(QWidget):
             self.cards_layout.addWidget(card_widget)
 
     def _create_card_widget(self, card):
-        """Создаёт виджет для одной карточки с возможностью раскрытия ответа."""
+        """Создаёт виджет для одной карточки. Открывается по клику."""
         card_frame = QFrame()
         card_frame.setFrameShape(QFrame.Box)
         card_frame.setStyleSheet("""
@@ -131,76 +131,45 @@ class FlashcardsView(QWidget):
             }
             QFrame:hover {
                 background-color: #F9F9F9;
-                border-color: #AAA;
+                border-color: #999;
             }
         """)
 
-        layout = QVBoxLayout(card_frame)
+        # Клик по карточке = открытие
+        card_frame.mousePressEvent = lambda e, cid=card.id: self._open_card_dialog(cid)
 
-        # ========== Верхняя строка: иконка + тип + кнопки ==========
+        layout = QVBoxLayout(card_frame)
+        layout.setSpacing(6)
+
+        # ========== Верхняя строка: метка для Вопрос-Ответ + кнопка удаления ==========
         header_layout = QHBoxLayout()
 
-        # Иконка и тип
-        if card.type == "free":
-            icon_label = QLabel("📝")
-            type_label = QLabel("Свободная")
-            type_label.setStyleSheet("color: #666; font-size: 11px;")
-        else:
-            icon_label = QLabel("❓")
-            type_label = QLabel("Вопрос-Ответ")
-            type_label.setStyleSheet("color: #666; font-size: 11px;")
-
-        icon_label.setStyleSheet("font-size: 18px;")
-        header_layout.addWidget(icon_label)
-        header_layout.addWidget(type_label)
+        # Только для Вопрос-Ответ показываем маленькую метку
+        if card.type == "qa":
+            type_badge = QLabel("❓ Вопрос-Ответ")
+            type_badge.setStyleSheet("""
+                QLabel {
+                    color: #1565C0;
+                    font-size: 10px;
+                    padding: 0px;
+                    border: none;
+                }
+            """)
+            header_layout.addWidget(type_badge)
 
         header_layout.addStretch()
 
-        # Кнопка открытия (глазик)
-        open_btn = QPushButton("👁️")
-        open_btn.setFixedSize(28, 28)
-        open_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #2196F3;
-                border: none;
-                border-radius: 4px;
-                font-size: 12px;
-                color: white;
-            }
-            QPushButton:hover { background-color: #1976D2; }
-        """)
-        open_btn.setToolTip("Открыть")
-        open_btn.clicked.connect(lambda checked=False, cid=card.id: self._open_card_dialog(cid))
-        header_layout.addWidget(open_btn)
-
-        # Кнопка редактирования
-        edit_btn = QPushButton("✏️")
-        edit_btn.setFixedSize(28, 28)
-        edit_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #FFC107;
-                border: none;
-                border-radius: 4px;
-                font-size: 12px;
-            }
-            QPushButton:hover { background-color: #FFB300; }
-        """)
-        edit_btn.setToolTip("Редактировать")
-        edit_btn.clicked.connect(lambda checked=False, cid=card.id: self.edit_card(cid))
-        header_layout.addWidget(edit_btn)
-
         # Кнопка удаления
         delete_btn = QPushButton("🗑️")
-        delete_btn.setFixedSize(28, 28)
+        delete_btn.setFixedSize(24, 24)
         delete_btn.setStyleSheet("""
             QPushButton {
-                background-color: #F44336;
+                background-color: transparent;
                 border: none;
-                border-radius: 4px;
-                font-size: 12px;
-                color: white;
+                font-size: 14px;
+                color: #999;
             }
-            QPushButton:hover { background-color: #D32F2F; }
+            QPushButton:hover { color: #F44336; }
         """)
         delete_btn.setToolTip("Удалить")
         delete_btn.clicked.connect(lambda checked=False, cid=card.id: self.delete_card(cid))
@@ -208,60 +177,20 @@ class FlashcardsView(QWidget):
 
         layout.addLayout(header_layout)
 
-        # ========== Содержимое карточки ==========
+        # ========== Содержимое ==========
         if card.type == "free":
-            # Свободная карточка - показываем содержимое
-            content_preview = card.content[:150] + "..." if len(card.content or "") > 150 else card.content
-            content_label = QLabel(content_preview or "Нет содержимого")
+            content_label = QLabel(card.content or "Нет содержимого")
             content_label.setWordWrap(True)
-            content_label.setStyleSheet("font-size: 13px; margin-top: 8px;")
+            content_label.setStyleSheet("font-size: 13px; border: none; padding: 0px;")
             layout.addWidget(content_label)
 
         else:  # question_answer
-            # Вопрос-Ответ: показываем вопрос, ответ скрыт
-            question_text = card.question[:100] + "..." if len(card.question or "") > 100 else card.question
-            question_label = QLabel(f"<b>Вопрос:</b> {question_text}")
+            question_label = QLabel(f"<b>Вопрос:</b> {card.question}")
             question_label.setWordWrap(True)
-            question_label.setStyleSheet("font-size: 13px; margin-top: 8px;")
+            question_label.setStyleSheet("font-size: 13px; border: none; padding: 0px;")
             layout.addWidget(question_label)
 
-            # Кнопка показа ответа
-            self.answer_buttons = {}  # словарь для хранения кнопок и виджетов ответа
-            show_answer_btn = QPushButton("📖 Показать ответ")
-            show_answer_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #E0E0E0;
-                    border: none;
-                    border-radius: 4px;
-                    padding: 4px 8px;
-                    font-size: 11px;
-                    margin-top: 5px;
-                    text-align: left;
-                }
-                QPushButton:hover { background-color: #CCCCCC; }
-            """)
-
-            # Создаём скрытый виджет для ответа
-            answer_widget = QWidget()
-            answer_widget.setVisible(False)
-            answer_layout = QVBoxLayout(answer_widget)
-            answer_layout.setContentsMargins(10, 5, 0, 5)
-
-            answer_preview = card.answer[:100] + "..." if len(card.answer or "") > 100 else card.answer
-            answer_label = QLabel(f"<b>Ответ:</b> {answer_preview}")
-            answer_label.setWordWrap(True)
-            answer_label.setStyleSheet(
-                "font-size: 12px; color: #2E7D32; background-color: #F1F8E9; padding: 5px; border-radius: 4px;")
-            answer_layout.addWidget(answer_label)
-
-            # Сохраняем ссылки для переключения
-            show_answer_btn.clicked.connect(
-                lambda checked=False, aw=answer_widget, btn=show_answer_btn: self._toggle_answer(aw, btn))
-
-            layout.addWidget(show_answer_btn)
-            layout.addWidget(answer_widget)
-
-        # ========== Дата ==========
+        # ========== Дата (простая строка, без обводки) ==========
         date_str = ""
         if hasattr(card, 'updated_at') and card.updated_at:
             date_str = card.updated_at[:16]
@@ -270,11 +199,8 @@ class FlashcardsView(QWidget):
 
         if date_str:
             date_label = QLabel(date_str)
-            date_label.setStyleSheet("color: gray; font-size: 10px; margin-top: 5px;")
+            date_label.setStyleSheet("color: #AAA; font-size: 10px; border: none; padding: 0px; margin-top: 5px;")
             layout.addWidget(date_label)
-
-        # Двойной клик для открытия
-        card_frame.mouseDoubleClickEvent = lambda e, cid=card.id: self._open_card_dialog(cid)
 
         return card_frame
 
