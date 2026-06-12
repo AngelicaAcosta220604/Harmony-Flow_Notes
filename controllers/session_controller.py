@@ -6,11 +6,15 @@ from models.session_state_log import SessionStateLog
 from models.quick_note import QuickNote
 from datetime import datetime
 from PySide6.QtCore import QObject, Signal
+from controllers.topic_controller import TopicController
 
 
 class SessionController(QObject):
     ping_needed = Signal()
     session_auto_paused = Signal(int)
+
+    def _update_topic_timestamp(self, topic_id: int):
+        TopicController().update_timestamp(topic_id)
 
     def __init__(self):
         super().__init__()
@@ -66,6 +70,7 @@ class SessionController(QObject):
         if self.ping_manager:
             self.ping_manager.reset_idle()
 
+        self._update_topic_timestamp(topic_id)
         return self.current_session_id
 
     def get_session(self, session_id: int):
@@ -95,6 +100,7 @@ class SessionController(QObject):
 
     def end_session(self, session_id: int, duration: int = None):
         session = self.get_session(session_id)
+        topic_id = session.topic_id if session else None
         if not session:
             return
 
@@ -128,6 +134,9 @@ class SessionController(QObject):
         if self.ping_manager:
             self.ping_manager.idle_timer.stop()
             self.ping_manager.timeout_timer.stop()
+
+        if topic_id:
+            self._update_topic_timestamp(topic_id)
 
     def log_state(self, session_id: int, metric: str, value: int, minute: int = None):
         if self.ping_manager and self.is_active:

@@ -18,10 +18,14 @@ class ReviewController:
         self.current_card_index = 0
         self.session_start_time = None
 
-    def start_session(self, topic_ids: List[int], include_free: bool = True, include_qa: bool = True) -> List:
+    def start_session(self, topic_ids: list, include_free: bool = True, include_qa: bool = True,
+                      skip_reviewed: bool = False) -> List:
         """Начинает новую сессию повторения"""
-        # Получаем карточки для повторения
         cards = self.flashcard_controller.get_cards_for_review(topic_ids, include_free, include_qa)
+
+        # Если нужно пропускать выученные
+        if skip_reviewed:
+            cards = [c for c in cards if c.review_status != "review"]
 
         if not cards:
             return []

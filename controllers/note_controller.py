@@ -18,10 +18,14 @@ NoteController — контроллер для работы с заметкам�
 from database.db_manager import db
 from models.note import Note
 from typing import List, Optional
-
+from controllers.topic_controller import TopicController
 
 class NoteController:
     """Контроллер для работы с заметками."""
+
+    def _update_topic_timestamp(self, topic_id: int):
+        """Обновляет время последнего изменения темы"""
+        TopicController().update_timestamp(topic_id)
 
     def get_notes_by_topic(self, topic_id: int) -> List[Note]:
         """Возвращает все заметки темы."""
@@ -34,18 +38,35 @@ class NoteController:
         return Note.from_row(row) if row else None
 
     def create_note(self, topic_id: int, title: str = "", content: str = "") -> int:
-        """Создаёт новую заметку. Возвращает id."""
-        return db.execute(
+        note_id = db.execute(
             "INSERT INTO notes (topic_id, title, content) VALUES (?, ?, ?)",
             (topic_id, title, content)
         )
+        self._update_topic_timestamp(topic_id)  # <-- ДОБАВИТЬ
+        return note_id
 
     def update_note(self, note_id: int, title: str = None, content: str = None) -> None:
-        """Обновляет заметку. Обновляет updated_at автоматически."""
+        # Сначала получаем topic_id заметки
+        note = self.get_note(note_id)
+        if not note:
+            return
+
         if title is not None:
             db.execute("UPDATE notes SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (title, note_id))
         if content is not None:
             db.execute("UPDATE notes SET content = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (content, note_id))
+
+        self._update_topic_timestamp(note.topic_id)  # <-- ДОБАВИТЬ
+
+    def delete_note(self, note_id: int) -> None:
+        # Сначала получаем topic_id заметки
+        note = self.get_note(note_id)
+        topic_id = note.topic_id if note else None
+
+        db.execute("DELETE FROM notes WHERE id = ?", (note_id,))
+
+        if topic_id:
+            self._update_topic_timestamp(topic_id)
 
     def delete_note(self, note_id: int) -> None:
         """Удаляет заметку."""

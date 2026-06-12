@@ -179,7 +179,7 @@ class DatabaseManager:
                 ("auto_pause_minutes", "10"),
                 ("auto_save_interval_seconds", "60"),
                 ("notifications_enabled", "true"),
-                ("default_sound", "off"),
+                ("default_sound", "off"),("review_threshold", "3"),
             ]
             for key, value in default_settings:
                 cursor.execute("""

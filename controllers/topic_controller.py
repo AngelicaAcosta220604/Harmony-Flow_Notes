@@ -74,3 +74,7 @@ def move_topic(self, topic_id: int, new_parent_id: Optional[int]) -> None:
         (new_parent_id, topic_id)
     )
     print(f"DEBUG move_topic: SQL выполнен")  # ДОБАВИТЬ
+
+def update_timestamp(self, topic_id: int):
+    """Обновляет updated_at темы (когда меняется содержимое)"""
+    db.execute("UPDATE topics SET updated_at = CURRENT_TIMESTAMP WHERE id = ?", (topic_id,))

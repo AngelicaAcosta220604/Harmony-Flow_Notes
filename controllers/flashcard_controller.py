@@ -2,23 +2,28 @@
 
 from database.db_manager import db
 from models.flashcard import Flashcard
-
+from controllers.topic_controller import TopicController
 
 class FlashcardController:
 
+    def _update_topic_timestamp(self, topic_id: int):
+        TopicController().update_timestamp(topic_id)
+
     def create_free_card(self, topic_id: int, content: str, source_note_id: int = None) -> int:
-        """Создаёт свободную карточку"""
-        return db.execute(
+        result = db.execute(
             "INSERT INTO flashcards (topic_id, source_note_id, type, content) VALUES (?, ?, ?, ?)",
             (topic_id, source_note_id, "free", content)
         )
+        self._update_topic_timestamp(topic_id)  # <-- ДОБАВИТЬ
+        return result
 
     def create_qa_card(self, topic_id: int, question: str, answer: str, source_note_id: int = None) -> int:
-        """Создаёт карточку вопрос-ответ"""
-        return db.execute(
+        result = db.execute(
             "INSERT INTO flashcards (topic_id, source_note_id, type, question, answer) VALUES (?, ?, ?, ?, ?)",
             (topic_id, source_note_id, "qa", question, answer)
         )
+        self._update_topic_timestamp(topic_id)  # <-- ДОБАВИТЬ
+        return result
 
     def get_card(self, card_id: int):
         """Возвращает одну карточку по ID"""
@@ -47,16 +52,29 @@ class FlashcardController:
         return [Flashcard.from_row(row) for row in rows]
 
     def update_card(self, card_id: int, content: str = None, question: str = None, answer: str = None):
-        """Обновляет карточку."""
+        # Сначала получаем topic_id карточки
+        card = self.get_card(card_id)
+        if not card:
+            return
+
         if content is not None:
-            db.execute("UPDATE flashcards SET content = ?, updated_at = datetime('now') WHERE id = ?", (content, card_id))
+            db.execute("UPDATE flashcards SET content = ?, updated_at = datetime('now') WHERE id = ?",
+                       (content, card_id))
         elif question is not None and answer is not None:
             db.execute("UPDATE flashcards SET question = ?, answer = ?, updated_at = datetime('now') WHERE id = ?",
                        (question, answer, card_id))
 
+        self._update_topic_timestamp(card.topic_id)
+
     def delete_card(self, card_id: int):
-        """Удаляет карточку."""
+        # Сначала получаем topic_id карточки
+        card = self.get_card(card_id)
+        topic_id = card.topic_id if card else None
+
         db.execute("DELETE FROM flashcards WHERE id = ?", (card_id,))
+
+        if topic_id:
+            self._update_topic_timestamp(topic_id)
 
     def get_cards_for_review(self, topic_ids: list, include_free: bool = True, include_qa: bool = True) -> list:
         """Возвращает карточки из выбранных тем для повторения"""
@@ -95,17 +113,20 @@ class FlashcardController:
         return [Flashcard.from_row(row) for row in rows]
 
     def update_card_review_status(self, card_id: int, rating: int):
-        """Обновляет статус карточки после повторения"""
         card = self.get_card(card_id)
         if not card:
             return
 
-        if rating == 1 or rating == 2:  # Забыл или Слабо
+        # Получаем порог из настроек
+        threshold_row = db.fetchone("SELECT setting_value FROM app_settings WHERE setting_key = 'review_threshold'")
+        threshold = int(threshold_row["setting_value"]) if threshold_row else 3
+
+        if rating == 1 or rating == 2:
             new_status = "learning"
             new_consecutive = 0
-        else:  # Знаю
+        else:
             new_consecutive = card.consecutive_correct + 1
-            if new_consecutive >= 3:
+            if new_consecutive >= threshold:
                 new_status = "review"
             else:
                 new_status = card.review_status
