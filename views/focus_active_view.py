@@ -1,5 +1,6 @@
 # views/focus_active_view.py
 
+from datetime import datetime  # ← ИСПРАВИТЬ: импортируем класс datetime
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFrame, QMessageBox,
@@ -296,6 +297,54 @@ class FocusActiveView(QWidget):
             self.state_sliders.get_interest(),
             minute
         )
+
+    def resume_existing_session(self, session_id: int, topic_id: int, topic_name: str):
+        """Возобновляет существующую сессию"""
+        self.current_session_id = session_id
+        self.current_topic_id = topic_id
+        self.current_topic_name = topic_name
+
+        session = self.session_controller.get_session(session_id)
+        if not session:
+            return
+
+        self.topic_label.setText(f"📚 {topic_name} (возобновлена)")
+
+        # Устанавливаем таймер на суммарное активное время
+        total_seconds = session.total_active_seconds
+        self.timer.set_seconds(total_seconds)
+
+        if session.status == "paused":
+            self.timer.pause()
+            self.pause_btn.setText("▶ Возобновить")
+            self.pause_btn.setStyleSheet("""
+                QPushButton {
+                    padding: 12px;
+                    background-color: #4CAF50;
+                    color: white;
+                    border: none;
+                    border-radius: 8px;
+                }
+                QPushButton:hover { background-color: #45a049; }
+            """)
+        else:
+            self.timer.start(total_seconds)
+            self.pause_btn.setText("⏸ Пауза")
+            self.pause_btn.setStyleSheet("""
+                QPushButton {
+                    padding: 12px;
+                    background-color: #FF9800;
+                    color: white;
+                    border: none;
+                    border-radius: 8px;
+                }
+                QPushButton:hover { background-color: #e68900; }
+            """)
+
+        self.session_controller.resume_session(session_id)
+        self.is_active = True
+        self.pause_btn.setEnabled(True)
+        self.end_btn.setEnabled(True)
 
     # =========================================================
     # БЫСТРЫЕ ЗАПИСИ

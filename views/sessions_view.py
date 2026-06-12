@@ -9,19 +9,20 @@ from PySide6.QtCore import Qt, Signal
 from datetime import datetime
 
 from services import TimeService
+from widgets.quick_notes_viewer import QuickNotesViewer
 
 
 class SessionsView(QWidget):
     """Виджет для отображения истории сессий темы."""
 
-    start_session_requested = Signal(int, str)  # topic_id, topic_name
+    start_session_requested = Signal(int, str)
+    resume_session_requested = Signal(int, str)  # session_id, topic_name
 
     def __init__(self, session_controller, topic_id: int, topic_name: str, parent=None):
         super().__init__(parent)
         self.session_controller = session_controller
         self.topic_id = topic_id
         self.topic_name = topic_name
-        self.expanded_items = set()
 
         self.current_sessions = []
 
@@ -31,8 +32,10 @@ class SessionsView(QWidget):
     def setup_ui(self):
         """Настройка интерфейса."""
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
 
         top_bar = QHBoxLayout()
+        top_bar.setContentsMargins(10, 10, 10, 10)
 
         self.start_btn = QPushButton("▶ Начать сессию")
         self.start_btn.setStyleSheet("""
@@ -59,23 +62,41 @@ class SessionsView(QWidget):
 
         layout.addLayout(top_bar)
 
-        self.scroll_area = QScrollArea()
-        self.scroll_area.setWidgetResizable(True)
-        self.scroll_area.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        # Основной скролл-область для списка сессий
+        self.main_scroll = QScrollArea()
+        self.main_scroll.setWidgetResizable(True)
+        self.main_scroll.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background: transparent;
+            }
+            QScrollBar:vertical {
+                width: 8px;
+                background: #F0F0F0;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:vertical {
+                background: #CCC;
+                border-radius: 4px;
+                min-height: 20px;
+            }
+        """)
 
         self.sessions_container = QWidget()
         self.sessions_layout = QVBoxLayout(self.sessions_container)
         self.sessions_layout.setAlignment(Qt.AlignTop)
         self.sessions_layout.setSpacing(10)
+        self.sessions_layout.setContentsMargins(10, 5, 10, 5)
 
-        self.scroll_area.setWidget(self.sessions_container)
-        layout.addWidget(self.scroll_area)
+        self.main_scroll.setWidget(self.sessions_container)
+        layout.addWidget(self.main_scroll)
 
     def load_sessions(self):
         self.current_sessions = self.session_controller.get_sessions_by_topic(self.topic_id)
         self.display_sessions()
 
     def display_sessions(self):
+        # Очищаем контейнер
         while self.sessions_layout.count():
             item = self.sessions_layout.takeAt(0)
             if item.widget():
@@ -105,6 +126,7 @@ class SessionsView(QWidget):
         card_frame = QFrame()
         card_frame.setFrameShape(QFrame.Box)
         card_frame.setProperty("session_id", session.id)
+        card_frame.setSizePolicy(card_frame.sizePolicy().horizontalPolicy(), card_frame.sizePolicy().verticalPolicy())
         card_frame.setStyleSheet("""
             QFrame {
                 border: 1px solid #DDD;
@@ -119,26 +141,10 @@ class SessionsView(QWidget):
         """)
 
         layout = QVBoxLayout(card_frame)
+        layout.setSpacing(5)
 
         # Верхняя строка
         header_layout = QHBoxLayout()
-
-        expand_btn = QPushButton("▶")
-        expand_btn.setFixedSize(24, 24)
-        expand_btn.setStyleSheet("""
-            QPushButton {
-                border: none;
-                font-size: 12px;
-                background-color: transparent;
-            }
-            QPushButton:hover {
-                color: #51b2c1;
-            }
-        """)
-        is_expanded = session.id in self.expanded_items
-        expand_btn.setText("▼" if is_expanded else "▶")
-
-        header_layout.addWidget(expand_btn)
 
         date_label = QLabel(f"⏱ {TimeService.format_display(session.start_time)}")
         date_label.setStyleSheet("font-size: 13px; font-weight: bold;")
@@ -171,7 +177,7 @@ class SessionsView(QWidget):
 
         # Вторая строка
         info_layout = QHBoxLayout()
-        info_layout.addSpacing(30)
+        info_layout.addSpacing(0)
 
         time_text = self._format_time_range(session.start_time, session.end_time)
         if time_text:
@@ -180,6 +186,25 @@ class SessionsView(QWidget):
             info_layout.addWidget(time_label)
 
         info_layout.addStretch()
+
+        # Кнопка "Быстрые записи"
+        quick_notes_btn = QPushButton("📝 Быстрые записи")
+        quick_notes_btn.setFixedSize(110, 26)
+        quick_notes_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #9C27B0;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background-color: #7B1FA2;
+            }
+        """)
+        quick_notes_btn.setToolTip("Просмотреть быстрые записи этой сессии")
+        quick_notes_btn.clicked.connect(lambda checked, sid=session.id: self._show_quick_notes(sid))
+        info_layout.addWidget(quick_notes_btn)
 
         delete_btn = QPushButton("🗑️ Удалить")
         delete_btn.setFixedSize(80, 26)
@@ -195,90 +220,68 @@ class SessionsView(QWidget):
                 background-color: #D32F2F;
             }
         """)
+        delete_btn.setToolTip("Удалить всю сессию")
         delete_btn.clicked.connect(lambda checked, sid=session.id: self._delete_session(sid))
         info_layout.addWidget(delete_btn)
 
         layout.addLayout(info_layout)
 
-        # Раскрывающаяся часть — СОЗДАЁМ ОДИН РАЗ
-        expand_widget = QWidget()
-        expand_widget.setVisible(is_expanded)
-        expand_layout = QVBoxLayout(expand_widget)
-        expand_layout.setContentsMargins(30, 10, 0, 5)
-
-        # Заполняем контейнер
-        quick_notes = self.session_controller.get_quick_notes(session.id)
-        if quick_notes:
-            expand_layout.addWidget(QLabel("📝 Быстрые записи во время сессии:"))
-            for note in quick_notes:
-                note_frame = self._create_note_widget(note)
-                expand_layout.addWidget(note_frame)
-        else:
-            empty_label = QLabel("Нет быстрых записей во время этой сессии")
-            empty_label.setStyleSheet("color: #999; font-size: 11px;")
-            expand_layout.addWidget(empty_label)
-
-        layout.addWidget(expand_widget)
-
-        # Сохраняем ссылки для управления видимостью
-        card_frame.expand_widget = expand_widget
-        card_frame.expand_btn = expand_btn
-
-        # Подключаем сигнал напрямую
-        expand_btn.clicked.connect(lambda checked, cf=card_frame: self._toggle_expand_card(cf))
+        # Обработчик клика по всей карточке (кроме кнопок)
+        card_frame.mousePressEvent = lambda event, sid=session.id, stat=session.status: self._on_card_clicked(event,
+                                                                                                              sid, stat)
 
         return card_frame
 
-    def _create_note_widget(self, note):
-        note_frame = QFrame()
-        note_frame.setStyleSheet("""
-            QFrame {
-                border: none;
-                background-color: #f5f5f5;
-                border-radius: 4px;
-                padding: 5px;
-                margin: 2px 0;
-            }
-        """)
+    def _on_card_clicked(self, event, session_id: int, status: str):
+        """Обработчик клика по карточке сессии"""
+        # Получаем виджет, на котором произошёл клик
+        child = self.childAt(event.pos())
 
-        layout = QVBoxLayout(note_frame)
-        layout.setContentsMargins(8, 5, 8, 5)
+        # Если клик был по кнопке или её дочернему элементу — не обрабатываем
+        if child:
+            # Проверяем, является ли виджет кнопкой или имеет кнопку в родителях
+            while child:
+                if isinstance(child, QPushButton):
+                    return
+                child = child.parent()
 
-        if note.created_at:
-            date_str = TimeService.format_display(note.created_at)
-            if date_str:
-                date_label = QLabel(f"📌 {date_str}")
-                date_label.setStyleSheet("color: #888; font-size: 10px;")
-                layout.addWidget(date_label)
+        # Если сессия не завершена (активна или на паузе)
+        if status in ("active", "paused", "auto_paused"):
+            reply = SilentMessageBox.question(
+                self,
+                "Возобновить сессию?",
+                f"Эта сессия {self._get_status_text(status)}. Хотите её продолжить?"
+            )
+            if reply == QMessageBox.Yes:
+                self.resume_session_requested.emit(session_id, self.topic_name)
+        else:
+            # Для завершённых сессий можно показать аналитику
+            session = self._get_session_by_id(session_id)
+            if session:
+                SilentMessageBox.information(
+                    self,
+                    "Завершённая сессия",
+                    f"Сессия завершена {TimeService.format_display(session.start_time)}.\n"
+                    f"Длительность: {session.duration_minutes} минут."
+                )
 
-        text_label = QLabel(note.content)
-        text_label.setWordWrap(True)
-        text_label.setStyleSheet("color: #333; font-size: 12px;")
-        layout.addWidget(text_label)
+    def _get_session_by_id(self, session_id: int):
+        """Возвращает сессию по ID"""
+        for session in self.current_sessions:
+            if session.id == session_id:
+                return session
+        return None
 
-        return note_frame
-
-    def _toggle_expand_card(self, card_frame):
-        """Переключает видимость раскрывающейся части конкретной карточки"""
-        if hasattr(card_frame, 'expand_widget') and hasattr(card_frame, 'expand_btn'):
-            is_visible = card_frame.expand_widget.isVisible()
-            card_frame.expand_widget.setVisible(not is_visible)
-            card_frame.expand_btn.setText("▼" if not is_visible else "▶")
-
-            # Обновляем состояние в self.expanded_items
-            session_id = card_frame.property("session_id")
-            if session_id:
-                if not is_visible:
-                    self.expanded_items.add(session_id)
-                else:
-                    self.expanded_items.discard(session_id)
+    def _show_quick_notes(self, session_id: int):
+        """Открывает окно с быстрыми записями сессии"""
+        dialog = QuickNotesViewer(self.session_controller, session_id, self)
+        dialog.exec()
 
     def _format_time_range(self, start_str, end_str):
         if not start_str:
             return ""
         try:
             start_time = TimeService.format_display(start_str).split()[-1]
-
             if end_str:
                 end_time = TimeService.format_display(end_str).split()[-1]
                 return f"{start_time} - {end_time}"
@@ -306,6 +309,17 @@ class SessionsView(QWidget):
             self.session_controller.delete_session(session_id)
             self.load_sessions()
             SilentMessageBox.information(self, "Готово", "Сессия удалена")
+
+    def _delete_quick_note(self, note_id: int, session_id: int):
+        """Удаляет быструю запись (вызывается из диалога)"""
+        reply = SilentMessageBox.question(
+            self, "Удаление записи",
+            "Вы уверены, что хотите удалить эту быструю запись?"
+        )
+        if reply == QMessageBox.Yes:
+            from database.db_manager import db
+            db.execute("DELETE FROM quick_notes WHERE id = ?", (note_id,))
+            self.load_sessions()
 
     def _on_start_session(self):
         self.start_session_requested.emit(self.topic_id, self.topic_name)

@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
 )
 from widgets.silent_dialog import SilentMessageBox
 from PySide6.QtCore import Qt
+from datetime import datetime
 
 from views.flashcards_view import FlashcardsView
 from widgets.tree_widget import TreeWidget
@@ -88,7 +89,6 @@ class MainWindow(QMainWindow):
         # Страница 1: Дерево тем
         self.tree_widget = TreeWidget(topic_controller=self.topic_controller)
         self.tree_widget.topic_selected.connect(self.on_topic_selected)
-        # Подключаем сигнал обновления тем из дерева
         self.tree_widget.topics_changed.connect(self.on_topics_changed)
 
         # Страница 2: Экран выбора темы для сессии
@@ -122,7 +122,7 @@ class MainWindow(QMainWindow):
             topic_controller=self.topic_controller
         )
         self.review_session_view.back_to_cards.connect(lambda: self.stack.setCurrentWidget(self.global_cards_view))
-        self.review_session_view.session_finished.connect(lambda: self.stack.setCurrentWidget(self.global_cards_view))
+        self.review_session_view.session_finished.connect(self.refresh_global_cards)
 
         # Страница 7: Аналитика
         page_analytics = QLabel("📊 Аналитика\n\nГрафики и статистика")
@@ -204,7 +204,7 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentIndex(2)
         self.refresh_topic_combo()
         self.tree_widget.load_topics()
-        self.refresh_global_cards()  # ← ДОБАВИТЬ
+        self.refresh_global_cards()
 
     def show_ping_dialog(self):
         from widgets.ping_dialog import PingDialog
@@ -226,10 +226,11 @@ class MainWindow(QMainWindow):
         )
         topic_view.back_requested.connect(lambda: self.stack.setCurrentIndex(1))
         topic_view.start_session_requested.connect(self._start_session_from_topic)
+        topic_view.resume_existing_session_requested.connect(self.resume_session_from_history)  # ← ДОБАВИТЬ
         topic_view.show_session_analytics.connect(self._show_session_analytics)
         topic_view.cards_updated.connect(self.refresh_global_cards)
         topic_view.topic_updated.connect(self.refresh_topic_combo)
-        topic_view.topic_updated.connect(self.refresh_global_cards)  # ← ДОБАВИТЬ
+        topic_view.topic_updated.connect(self.refresh_global_cards)
         self.stack.addWidget(topic_view)
         self.stack.setCurrentWidget(topic_view)
 
@@ -259,3 +260,11 @@ class MainWindow(QMainWindow):
         self.refresh_topic_combo()
         self.refresh_global_cards()
         self.tree_widget.load_topics()
+
+    # ================== ВОЗОБНОВЛЕНИЕ СЕССИИ ИЗ ИСТОРИИ ==================
+    def resume_session_from_history(self, session_id: int, topic_name: str):
+        """Возобновляет сессию из истории"""
+        session = self.session_controller.get_session(session_id)
+        if session:
+            self.focus_active_view.resume_existing_session(session_id, session.topic_id, topic_name)
+            self.stack.setCurrentWidget(self.focus_active_view)

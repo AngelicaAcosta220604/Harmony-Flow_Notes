@@ -3,7 +3,7 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QScrollArea, QFrame, QComboBox,
-    QCheckBox, QDateEdit,
+    QCheckBox, QDateEdit, QMessageBox,
 )
 from widgets.silent_dialog import SilentMessageBox
 from PySide6.QtCore import Qt, Signal, QDate, QDateTime
@@ -25,7 +25,7 @@ class TasksView(QWidget):
 
         self.current_tasks = []
         self.current_filter = "all"  # all, active, completed, overdue
-        self.current_period = "all"  # all, month, week, day (по умолчанию all)
+        self.current_period = "all"  # all, month, week, day
         self.current_date = QDate.currentDate()
 
         # Русские названия месяцев
@@ -40,19 +40,33 @@ class TasksView(QWidget):
 
     def setup_ui(self):
         """Настройка интерфейса."""
-        layout = QVBoxLayout(self)
+        # Главный скролл для всей страницы
+        main_scroll = QScrollArea()
+        main_scroll.setWidgetResizable(True)
+        main_scroll.setFrameShape(QFrame.NoFrame)
+        main_scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+
+        scroll_content = QWidget()
+        layout = QVBoxLayout(scroll_content)
+        layout.setSpacing(15)
+        layout.setContentsMargins(10, 10, 10, 10)
+
+        main_scroll.setWidget(scroll_content)
+
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.addWidget(main_scroll)
 
         # ========== Верхняя панель ==========
         top_bar = QHBoxLayout()
+        top_bar.setContentsMargins(0, 0, 0, 0)
 
-        # Кнопка создания задачи
         self.create_btn = QPushButton("+ Новая задача")
         self.create_btn.clicked.connect(self.create_task)
         top_bar.addWidget(self.create_btn)
 
         top_bar.addSpacing(20)
 
-        # Фильтр по статусу
         filter_label = QLabel("Фильтр:")
         filter_label.setStyleSheet("font-size: 12px;")
         top_bar.addWidget(filter_label)
@@ -79,8 +93,8 @@ class TasksView(QWidget):
 
         # ========== Панель выбора периода ==========
         period_bar = QHBoxLayout()
+        period_bar.setContentsMargins(0, 0, 0, 0)
 
-        # Кнопки переключения периода
         self.btn_all = QPushButton("📋 Все задачи")
         self.btn_month = QPushButton("📅 Месяц")
         self.btn_week = QPushButton("📆 Неделя")
@@ -105,10 +119,8 @@ class TasksView(QWidget):
                 border-color: #51b2c1;
             }
         """
-        self.btn_all.setStyleSheet(period_style)
-        self.btn_month.setStyleSheet(period_style)
-        self.btn_week.setStyleSheet(period_style)
-        self.btn_day.setStyleSheet(period_style)
+        for btn in [self.btn_all, self.btn_month, self.btn_week, self.btn_day]:
+            btn.setStyleSheet(period_style)
 
         self.btn_all.clicked.connect(lambda: self._set_period("all"))
         self.btn_month.clicked.connect(lambda: self._set_period("month"))
@@ -119,32 +131,28 @@ class TasksView(QWidget):
         period_bar.addWidget(self.btn_month)
         period_bar.addWidget(self.btn_week)
         period_bar.addWidget(self.btn_day)
-
         period_bar.addStretch()
         layout.addLayout(period_bar)
 
-        # ========== Панель навигации (отдельная строка) ==========
+        # ========== Панель навигации ==========
         nav_bar = QHBoxLayout()
+        nav_bar.setContentsMargins(0, 0, 0, 0)
 
-        # Кнопка навигации влево
         self.nav_left_btn = QPushButton("◀")
         self.nav_left_btn.setFixedSize(30, 28)
         self.nav_left_btn.clicked.connect(self._nav_previous)
         nav_bar.addWidget(self.nav_left_btn)
 
-        # Надпись с текущим периодом (будет обновляться)
         self.period_title = QLabel()
         self.period_title.setStyleSheet("font-size: 14px; font-weight: bold; min-width: 200px;")
         self.period_title.setAlignment(Qt.AlignCenter)
         nav_bar.addWidget(self.period_title)
 
-        # Кнопка навигации вправо
         self.nav_right_btn = QPushButton("▶")
         self.nav_right_btn.setFixedSize(30, 28)
         self.nav_right_btn.clicked.connect(self._nav_next)
         nav_bar.addWidget(self.nav_right_btn)
 
-        # Выбор конкретной даты (маленький календарь)
         nav_bar.addSpacing(30)
         nav_bar.addWidget(QLabel("Перейти к дате:"))
         self.date_edit = QDateEdit()
@@ -154,26 +162,26 @@ class TasksView(QWidget):
         self.date_edit.setFixedWidth(120)
         self.date_edit.dateChanged.connect(self._on_date_changed)
         nav_bar.addWidget(self.date_edit)
-
         nav_bar.addStretch()
         layout.addLayout(nav_bar)
 
-        # Скрываем навигацию по умолчанию (пока режим "Все задачи")
+        # Скрываем навигацию по умолчанию
         self.nav_left_btn.setVisible(False)
         self.nav_right_btn.setVisible(False)
 
         # ========== Список задач ==========
-        self.scroll_area = QScrollArea()
-        self.scroll_area.setWidgetResizable(True)
-        self.scroll_area.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        self.tasks_scroll = QScrollArea()
+        self.tasks_scroll.setWidgetResizable(True)
+        self.tasks_scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
 
         self.tasks_container = QWidget()
         self.tasks_layout = QVBoxLayout(self.tasks_container)
         self.tasks_layout.setAlignment(Qt.AlignTop)
         self.tasks_layout.setSpacing(8)
+        self.tasks_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.scroll_area.setWidget(self.tasks_container)
-        layout.addWidget(self.scroll_area)
+        self.tasks_scroll.setWidget(self.tasks_container)
+        layout.addWidget(self.tasks_scroll)
 
     def _update_navigation_visibility(self):
         """Обновляет видимость навигационных стрелок и заголовок периода."""
@@ -181,7 +189,6 @@ class TasksView(QWidget):
         self.nav_left_btn.setVisible(show_nav)
         self.nav_right_btn.setVisible(show_nav)
 
-        # Обновляем заголовок
         if self.current_period == "month":
             month_ru = self.month_names.get(self.current_date.month(), "")
             self.period_title.setText(f"{month_ru} {self.current_date.year()}")
@@ -202,15 +209,11 @@ class TasksView(QWidget):
         self.btn_month.setChecked(period == "month")
         self.btn_week.setChecked(period == "week")
         self.btn_day.setChecked(period == "day")
-
-        # Обновляем видимость навигации
         self._update_navigation_visibility()
 
-        # Если переключились на "Все задачи" — сбрасываем навигацию
         if period == "all":
             self.load_tasks()
         else:
-            # Синхронизируем date_edit с текущим периодом
             self.date_edit.setDate(self.current_date)
             self.load_tasks()
 
@@ -222,7 +225,6 @@ class TasksView(QWidget):
             self.current_date = self.current_date.addDays(-7)
         elif self.current_period == "day":
             self.current_date = self.current_date.addDays(-1)
-
         self.date_edit.setDate(self.current_date)
         self._update_navigation_visibility()
         self.load_tasks()
@@ -235,7 +237,6 @@ class TasksView(QWidget):
             self.current_date = self.current_date.addDays(7)
         elif self.current_period == "day":
             self.current_date = self.current_date.addDays(1)
-
         self.date_edit.setDate(self.current_date)
         self._update_navigation_visibility()
         self.load_tasks()
@@ -256,20 +257,16 @@ class TasksView(QWidget):
         today = self.current_date
 
         if self.current_period == "day":
-            start_date = today
-            end_date = today
+            return today, today
         elif self.current_period == "week":
             days_to_monday = today.dayOfWeek() - 1
             start_date = today.addDays(-days_to_monday)
-            end_date = start_date.addDays(6)
+            return start_date, start_date.addDays(6)
         elif self.current_period == "month":
             start_date = QDate(today.year(), today.month(), 1)
-            end_date = QDate(today.year(), today.month(), start_date.daysInMonth())
-        else:  # all
-            start_date = None
-            end_date = None
-
-        return start_date, end_date
+            return start_date, QDate(today.year(), today.month(), start_date.daysInMonth())
+        else:
+            return None, None
 
     def load_tasks(self):
         """Загружает и отображает задачи."""
@@ -290,9 +287,6 @@ class TasksView(QWidget):
                         period_tasks.append(task)
                 except:
                     pass
-            else:
-                # Задачи без дедлайна показываем только в режиме "all"
-                pass
 
         # Обновляем статус просроченных
         now = datetime.now()
@@ -325,7 +319,6 @@ class TasksView(QWidget):
             return datetime.max
 
         self.current_tasks.sort(key=task_date_key)
-
         self.display_tasks()
 
     def display_tasks(self):
@@ -375,6 +368,7 @@ class TasksView(QWidget):
         """Создаёт карточку задачи."""
         task_frame = QFrame()
         task_frame.setFrameShape(QFrame.Box)
+        task_frame.setSizePolicy(task_frame.sizePolicy().horizontalPolicy(), task_frame.sizePolicy().verticalPolicy())
 
         deadline_status = self._get_deadline_status(task.deadline)
         is_completed = task.status == "completed"
@@ -435,9 +429,11 @@ class TasksView(QWidget):
             """)
 
         layout = QVBoxLayout(task_frame)
+        layout.setSpacing(5)
 
         # ========== Верхняя строка ==========
         header_layout = QHBoxLayout()
+        header_layout.setContentsMargins(0, 0, 0, 0)
 
         # Чекбокс
         checkbox = QCheckBox()
@@ -457,7 +453,6 @@ class TasksView(QWidget):
         # Дедлайн (только если не выполнена)
         if not is_completed and task.deadline:
             try:
-                deadline_dt = datetime.fromisoformat(task.deadline)
                 deadline_label = QLabel(f"📅 {TimeService.format_display(task.deadline)}")
 
                 if deadline_status == "overdue":
@@ -491,7 +486,7 @@ class TasksView(QWidget):
             }
             QPushButton:hover { background-color: #FFB300; }
         """)
-        edit_btn.clicked.connect(lambda checked=False, tid=task.id: self.edit_task(tid))
+        edit_btn.clicked.connect(lambda: self.edit_task(task.id))
         header_layout.addWidget(edit_btn)
 
         delete_btn = QPushButton("🗑️")
@@ -505,12 +500,12 @@ class TasksView(QWidget):
             }
             QPushButton:hover { background-color: #D32F2F; }
         """)
-        delete_btn.clicked.connect(lambda checked=False, tid=task.id: self.delete_task(tid))
+        delete_btn.clicked.connect(lambda: self.delete_task(task.id))
         header_layout.addWidget(delete_btn)
 
         layout.addLayout(header_layout)
 
-        # Описание (для всех задач)
+        # Описание
         if task.description:
             desc_label = QLabel(task.description)
             desc_label.setWordWrap(True)
@@ -523,7 +518,6 @@ class TasksView(QWidget):
         # Дата создания
         if task.created_at:
             try:
-                created_dt = datetime.fromisoformat(task.created_at)
                 created_label = QLabel(f"📝 Создана: {TimeService.format_display(task.created_at)}")
                 if is_completed:
                     created_label.setStyleSheet("color: #aaa; font-size: 10px; margin-left: 25px;")
@@ -596,10 +590,7 @@ class TasksView(QWidget):
 
     def delete_task(self, task_id: int):
         """Удаляет задачу."""
-        reply = SilentMessageBox.question(self, "Удаление",
-            "Вы уверены, что хотите удалить эту задачу?",
-            QMessageBox.Yes | QMessageBox.No
-        )
+        reply = SilentMessageBox.question(self, "Удаление", "Вы уверены, что хотите удалить эту задачу?")
         if reply == QMessageBox.Yes:
             self.task_controller.delete_task(task_id)
             self.load_tasks()

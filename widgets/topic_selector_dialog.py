@@ -1,9 +1,9 @@
 # widgets/topic_selector_dialog.py
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel,
-    QComboBox, QPushButton
+    QComboBox, QPushButton, QMessageBox
 )
-from widgets.silent_message_box import QMessageBox
+
 
 class TopicSelectorDialog(QDialog):
     """Диалог выбора темы для создания карточки в глобальном режиме"""

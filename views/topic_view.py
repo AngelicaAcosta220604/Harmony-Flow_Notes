@@ -1,11 +1,10 @@
 # views/topic_view.py
 
-
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QTextEdit, QPushButton, QInputDialog,
     QFrame, QStackedWidget, QScrollArea, QSizePolicy,
-    QLineEdit, QComboBox, QMessageBox,  # <-- ОБА ДОЛЖНЫ БЫТЬ ЗДЕСЬ
+    QLineEdit, QComboBox, QMessageBox,
 )
 from widgets.silent_dialog import SilentMessageBox, SilentInputDialog
 from PySide6.QtCore import Qt, Signal
@@ -22,7 +21,8 @@ class TopicView(QWidget):
     start_session_requested = Signal(int, str)
     show_session_analytics = Signal(int)
     cards_updated = Signal()
-    topic_updated = Signal()  # для обновления списка тем в фокусе
+    topic_updated = Signal()
+    resume_existing_session_requested = Signal(int, str)  # ← ПРАВИЛЬНО: session_id, topic_name
 
     def __init__(self, topic_id, topic_controller, note_controller,
                  flashcard_controller, task_controller, session_controller, parent=None):
@@ -63,7 +63,6 @@ class TopicView(QWidget):
             top_bar.addWidget(date_label)
 
         main_layout.addLayout(top_bar)
-
         main_layout.addSpacing(10)
 
         # ========== Основное содержимое ==========
@@ -106,9 +105,39 @@ class TopicView(QWidget):
         menu_layout.addStretch()
         content_layout.addWidget(self.menu_widget)
 
-        # ---------- Правая область (QStackedWidget) ----------
+        # ---------- Правая область (с прокруткой) ----------
+        right_container = QWidget()
+        right_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        right_layout = QVBoxLayout(right_container)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.right_scroll = QScrollArea()
+        self.right_scroll.setWidgetResizable(True)
+        self.right_scroll.setFrameShape(QFrame.NoFrame)
+        self.right_scroll.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background: transparent;
+            }
+            QScrollBar:vertical {
+                width: 8px;
+                background: #F0F0F0;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:vertical {
+                background: #CCC;
+                border-radius: 4px;
+                min-height: 20px;
+            }
+        """)
+
         self.stack = QStackedWidget()
-        content_layout.addWidget(self.stack, 1)
+        self.stack.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+        self.right_scroll.setWidget(self.stack)
+        right_layout.addWidget(self.right_scroll)
+
+        content_layout.addWidget(right_container, 1)
 
         # ---------------------------------------------------------
         # Страница 0: Записи (список всех записей темы)
@@ -163,6 +192,7 @@ class TopicView(QWidget):
             topic_name=self.topic.name,
             parent=self
         )
+        self.sessions_view.resume_session_requested.connect(self._resume_session_from_history)
         self.sessions_view.start_session_requested.connect(self._start_new_session)
         self.stack.addWidget(self.sessions_view)
 
@@ -188,7 +218,6 @@ class TopicView(QWidget):
         self.current_note_id = None
         self.all_notes = []
         self._load_notes_list()
-
     # ==================== СОЗДАНИЕ СТРАНИЦ ====================
 
     def _create_notes_main_page(self) -> QWidget:
@@ -230,10 +259,25 @@ class TopicView(QWidget):
         layout.addSpacing(5)
 
         # ========== Область с прокруткой для списка записей ==========
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setFrameShape(QFrame.NoFrame)
-        scroll_area.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        notes_scroll = QScrollArea()
+        notes_scroll.setWidgetResizable(True)
+        notes_scroll.setFrameShape(QFrame.NoFrame)
+        notes_scroll.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background: transparent;
+            }
+            QScrollBar:vertical {
+                width: 8px;
+                background: #F0F0F0;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:vertical {
+                background: #CCC;
+                border-radius: 4px;
+                min-height: 20px;
+            }
+        """)
 
         self.notes_container = QWidget()
         self.notes_layout = QVBoxLayout(self.notes_container)
@@ -241,8 +285,8 @@ class TopicView(QWidget):
         self.notes_layout.setSpacing(8)
         self.notes_layout.setContentsMargins(0, 0, 0, 0)
 
-        scroll_area.setWidget(self.notes_container)
-        layout.addWidget(scroll_area)
+        notes_scroll.setWidget(self.notes_container)
+        layout.addWidget(notes_scroll)
 
         return page
 
@@ -544,3 +588,7 @@ class TopicView(QWidget):
     def _edit_editor(self):
         """Заглушка для редактора (используется NoteEditorView)"""
         pass
+
+    def _resume_session_from_history(self, session_id: int, topic_name: str):
+        """Возобновляет существующую сессию из истории"""
+        self.resume_existing_session_requested.emit(session_id, topic_name)

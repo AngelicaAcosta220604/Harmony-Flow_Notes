@@ -5,9 +5,10 @@ from PySide6.QtCore import QTimer, Qt
 
 class CustomTimer(QWidget):
     """
-    Прототип таймера для фокус-сессии.
+    Таймер для фокус-сессии.
     Поддерживает:
-    - старт
+    - старт с нуля
+    - старт с заданного времени
     - паузу
     - продолжение
     - сброс
@@ -38,11 +39,21 @@ class CustomTimer(QWidget):
     # Управление таймером
     # ---------------------------------------------------------
 
-    def start(self):
-        """Запускает таймер с нуля."""
-        self.seconds = 0
+    def start(self, start_seconds: int = 0):
+        """
+        Запускает таймер.
+        Если указано start_seconds — начинает с этого времени.
+        """
+        self.seconds = start_seconds
         self.running = True
         self.timer.start(1000)
+        self._update_label()
+
+    def set_seconds(self, seconds: int):
+        """
+        Устанавливает время таймера (без запуска).
+        """
+        self.seconds = seconds
         self._update_label()
 
     def pause(self):
@@ -52,7 +63,7 @@ class CustomTimer(QWidget):
             self.timer.stop()
 
     def resume(self):
-        """Продолжает таймер после паузы."""
+        """Продолжает таймер после паузы (сохраняя текущее время)."""
         if not self.running:
             self.running = True
             self.timer.start(1000)

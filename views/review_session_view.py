@@ -299,8 +299,6 @@ class ReviewSessionView(QWidget):
         self.card_layout.addWidget(self.answer_container)
         self.card_layout.addStretch()
 
-
-
     def _toggle_answer(self):
         """Показывает/скрывает ответ и включает кнопки оценки"""
         if not hasattr(self, 'show_answer_btn') or not hasattr(self, 'answer_container'):
@@ -353,6 +351,7 @@ class ReviewSessionView(QWidget):
             f"Нажмите «OK», чтобы вернуться к выбору тем."
         )
 
+        self.session_finished.emit()
         self.back_to_cards.emit()
 
     def _confirm_exit(self):

@@ -2,7 +2,7 @@
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QFrame, QScrollArea, QCheckBox, QGroupBox
+    QFrame, QScrollArea, QCheckBox, QGroupBox, QComboBox
 )
 from widgets.silent_dialog import SilentMessageBox
 from PySide6.QtCore import Qt, Signal
@@ -13,7 +13,7 @@ from controllers.review_controller import ReviewController
 class GlobalCardsView(QWidget):
     """Главная страница карточек: выбор тем, статистика, запуск повторения"""
 
-    start_review_requested = Signal(list, bool, bool, bool)  # topic_ids, include_free, include_qa
+    start_review_requested = Signal(list, bool, bool, bool)
 
     cards_updated = Signal()
 
@@ -27,9 +27,22 @@ class GlobalCardsView(QWidget):
         self.load_stats()
 
     def setup_ui(self):
-        layout = QVBoxLayout(self)
+        # Главный layout с прокруткой
+        main_scroll = QScrollArea()
+        main_scroll.setWidgetResizable(True)
+        main_scroll.setFrameShape(QFrame.NoFrame)
+        main_scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+
+        scroll_content = QWidget()
+        layout = QVBoxLayout(scroll_content)
         layout.setSpacing(20)
         layout.setContentsMargins(20, 20, 20, 20)
+
+        main_scroll.setWidget(scroll_content)
+
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.addWidget(main_scroll)
 
         # ========== Заголовок ==========
         title = QLabel("🃏 Карточки")
@@ -130,7 +143,10 @@ class GlobalCardsView(QWidget):
 
         group_layout = QVBoxLayout(group_box)
 
-        self.tree_selector = TopicTreeSelector(self.topic_controller)
+        self.tree_selector = TopicTreeSelector(
+            self.topic_controller,
+            self.flashcard_controller
+        )
         group_layout.addWidget(self.tree_selector)
 
         # Кнопки выбора
@@ -146,14 +162,6 @@ class GlobalCardsView(QWidget):
         group_layout.addLayout(select_buttons_layout)
 
         layout.addWidget(group_box, 1)
-
-        # ========== Кнопка обновления статистики ==========
-        refresh_layout = QHBoxLayout()
-        refresh_layout.addStretch()
-        self.refresh_btn = QPushButton("🔄 Обновить статистику")
-        self.refresh_btn.clicked.connect(self.load_stats)
-        refresh_layout.addWidget(self.refresh_btn)
-        layout.addLayout(refresh_layout)
 
     def load_stats(self):
         """Загружает и отображает общую статистику"""
@@ -173,29 +181,26 @@ class GlobalCardsView(QWidget):
 
         include_free = self.include_free_cb.isChecked()
         include_qa = self.include_qa_cb.isChecked()
-
         skip_reviewed = self.skip_reviewed_cb.isChecked()
 
         if not include_free and not include_qa:
             SilentMessageBox.warning(self, "Нет типов", "Выберите хотя бы один тип карточек!")
             return
 
-        # Проверяем, есть ли карточки для повторения
         cards = self.flashcard_controller.get_cards_for_review(
             selected_topics, include_free, include_qa
         )
 
         if not cards:
             SilentMessageBox.information(self, "Нет карточек",
-                "В выбранных темах нет активных карточек для повторения!\n\n"
-                "Создайте карточки через раздел 'Темы' → выберите тему → 'Карточки'."
-            )
+                                         "В выбранных темах нет активных карточек для повторения!\n\n"
+                                         "Создайте карточки через раздел 'Темы' → выберите тему → 'Карточки'."
+                                         )
             return
 
-        # Отправляем сигнал в MainWindow для переключения на окно повторения
         self.start_review_requested.emit(selected_topics, include_free, include_qa, skip_reviewed)
 
     def refresh(self):
         """Обновляет всё (вызывается при переключении на вкладку)"""
         self.load_stats()
-        self.tree_selector.load_topics()
+        self.tree_selector.refresh()
