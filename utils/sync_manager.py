@@ -1,4 +1,4 @@
-# managers/sync_manager.py
+# utils/sync_manager.py
 """
 SyncManager — менеджер синхронизации данных приложения.
 
@@ -16,21 +16,51 @@ import json
 from pathlib import Path
 from datetime import datetime
 
-from controllers.topic_controller import TopicController
-from controllers.note_controller import NoteController
-from controllers.task_controller import TaskController
-from controllers.flashcard_controller import FlashcardController
-from controllers.session_controller import SessionController
-
 
 class SyncManager:
 
     def __init__(self):
-        self.topics = TopicController()
-        self.notes = NoteController()
-        self.tasks = TaskController()
-        self.flashcards = FlashcardController()
-        self.sessions = SessionController()
+        # Ленивая инициализация контроллеров
+        self._topics = None
+        self._notes = None
+        self._tasks = None
+        self._flashcards = None
+        self._sessions = None
+
+    @property
+    def topics(self):
+        if self._topics is None:
+            from controllers.topic_controller import TopicController
+            self._topics = TopicController()
+        return self._topics
+
+    @property
+    def notes(self):
+        if self._notes is None:
+            from controllers.note_controller import NoteController
+            self._notes = NoteController()
+        return self._notes
+
+    @property
+    def tasks(self):
+        if self._tasks is None:
+            from controllers.task_controller import TaskController
+            self._tasks = TaskController()
+        return self._tasks
+
+    @property
+    def flashcards(self):
+        if self._flashcards is None:
+            from controllers.flashcard_controller import FlashcardController
+            self._flashcards = FlashcardController()
+        return self._flashcards
+
+    @property
+    def sessions(self):
+        if self._sessions is None:
+            from controllers.session_controller import SessionController
+            self._sessions = SessionController()
+        return self._sessions
 
     # ---------------------------------------------------------
     # ЭКСПОРТ ВСЕХ ДАННЫХ В JSON

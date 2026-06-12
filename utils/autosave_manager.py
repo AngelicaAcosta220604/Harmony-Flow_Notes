@@ -1,4 +1,4 @@
-# managers/autosave_manager.py
+# utils/autosave_manager.py
 """
 AutosaveManager — менеджер автосохранения заметок.
 
@@ -12,7 +12,6 @@ AutosaveManager — менеджер автосохранения заметок
 """
 
 from PySide6.QtCore import QTimer
-from controllers.note_controller import NoteController
 
 
 class AutosaveManager:
@@ -25,7 +24,8 @@ class AutosaveManager:
         self.note_id = note_id
         self.delay_ms = delay_ms
 
-        self.controller = NoteController()
+        # Ленивая инициализация
+        self._controller = None
 
         # Последнее сохранённое содержимое
         self.last_saved_text = ""
@@ -35,23 +35,25 @@ class AutosaveManager:
         self.timer.setSingleShot(True)
         self.timer.timeout.connect(self._save)
 
+    @property
+    def controller(self):
+        if self._controller is None:
+            from controllers.note_controller import NoteController
+            self._controller = NoteController()
+        return self._controller
+
     # ---------------------------------------------------------
     # ПРИВЯЗКА К ТЕКСТОВОМУ ПОЛЮ
     # ---------------------------------------------------------
     def connect_editor(self, editor):
-        """
-        Подключает autosave к QTextEdit / QPlainTextEdit.
-        """
+        """Подключает autosave к QTextEdit / QPlainTextEdit."""
         editor.textChanged.connect(lambda: self.schedule_save(editor))
 
     # ---------------------------------------------------------
     # ЗАПЛАНИРОВАТЬ СОХРАНЕНИЕ
     # ---------------------------------------------------------
     def schedule_save(self, editor):
-        """
-        Запускает таймер. Если пользователь продолжает печатать —
-        таймер перезапускается.
-        """
+        """Запускает таймер с задержкой."""
         self.current_editor = editor
         self.timer.start(self.delay_ms)
 
@@ -59,9 +61,7 @@ class AutosaveManager:
     # ВЫПОЛНИТЬ СОХРАНЕНИЕ
     # ---------------------------------------------------------
     def _save(self):
-        """
-        Сохраняет заметку, если текст изменился.
-        """
+        """Сохраняет заметку, если текст изменился."""
         text = self.current_editor.toPlainText()
 
         # Если текст не изменился — ничего не делаем
@@ -78,9 +78,7 @@ class AutosaveManager:
     # РУЧНОЕ СОХРАНЕНИЕ (например, при закрытии окна)
     # ---------------------------------------------------------
     def force_save(self, editor):
-        """
-        Принудительное сохранение.
-        """
+        """Принудительное сохранение."""
         text = editor.toPlainText()
         self.controller.autosave(self.note_id, text)
         self.last_saved_text = text

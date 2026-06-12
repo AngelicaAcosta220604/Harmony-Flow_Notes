@@ -1,4 +1,3 @@
-# Переключение светлой/тёмной темы
 # utils/theme_manager.py
 """
 ThemeManager — менеджер тем оформления приложения.
@@ -15,13 +14,13 @@ ThemeManager — менеджер тем оформления приложени
 
 from pathlib import Path
 from PySide6.QtWidgets import QApplication
-from controllers.settings_controller import SettingsController
 
 
 class ThemeManager:
 
     def __init__(self):
-        self.settings = SettingsController()
+        # Ленивая инициализация
+        self._settings = None
 
         # Папка со стилями
         self.styles_dir = Path(__file__).resolve().parents[1] / "resources" / "styles"
@@ -32,13 +31,18 @@ class ThemeManager:
             "dark": self.styles_dir / "dark.qss",
         }
 
+    @property
+    def settings(self):
+        if self._settings is None:
+            from controllers.settings_controller import SettingsController
+            self._settings = SettingsController()
+        return self._settings
+
     # ---------------------------------------------------------
     # ПРИМЕНИТЬ ТЕМУ
     # ---------------------------------------------------------
     def apply_theme(self, theme_name: str):
-        """
-        Применяет тему к приложению.
-        """
+        """Применяет тему к приложению."""
         if theme_name not in self.themes:
             raise ValueError(f"Тема '{theme_name}' не найдена")
 
@@ -57,10 +61,7 @@ class ThemeManager:
     # ЗАГРУЗИТЬ ТЕМУ ИЗ НАСТРОЕК
     # ---------------------------------------------------------
     def load_saved_theme(self):
-        """
-        Загружает тему, сохранённую в настройках.
-        Если нет — применяет светлую.
-        """
+        """Загружает тему, сохранённую в настройках."""
         theme = self.settings.get("theme") or "light"
         self.apply_theme(theme)
 
@@ -68,20 +69,14 @@ class ThemeManager:
     # СПИСОК ДОСТУПНЫХ ТЕМ
     # ---------------------------------------------------------
     def list_themes(self) -> list[str]:
-        """
-        Возвращает список доступных тем.
-        """
+        """Возвращает список доступных тем."""
         return list(self.themes.keys())
 
     # ---------------------------------------------------------
     # РЕГИСТРАЦИЯ НОВОЙ ТЕМЫ
     # ---------------------------------------------------------
     def register_theme(self, name: str, qss_file: str | Path):
-        """
-        Добавляет новую тему.
-        Пример:
-            register_theme("blue", "blue.qss")
-        """
+        """Добавляет новую тему."""
         path = Path(qss_file)
         if not path.exists():
             raise FileNotFoundError("Файл QSS не найден")
