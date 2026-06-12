@@ -22,6 +22,7 @@ class SessionController(QObject):
         self.ping_manager = None
         self.current_session_id = None
         self.is_active = False
+        self.session_start_time = None  # Для отслеживания начала активного отрезка
 
     def set_ping_manager(self, ping_manager):
         self.ping_manager = ping_manager
@@ -39,6 +40,15 @@ class SessionController(QObject):
 
     def auto_pause_session(self):
         if self.current_session_id:
+            # Сохраняем активное время перед авто-паузой
+            if self.is_active and self.session_start_time:
+                elapsed = int((datetime.now() - self.session_start_time).total_seconds())
+                db.execute(
+                    "UPDATE sessions SET total_active_seconds = total_active_seconds + ? WHERE id = ?",
+                    (elapsed, self.current_session_id)
+                )
+                self.session_start_time = None
+
             db.execute(
                 "UPDATE sessions SET status = ? WHERE id = ?",
                 ('auto_paused', self.current_session_id)
@@ -61,12 +71,13 @@ class SessionController(QObject):
         now = now_local_iso()
 
         session_id = db.execute(
-            "INSERT INTO sessions (topic_id, start_time, status) VALUES (?, ?, ?)",
-            (topic_id, now, 'active')
+            "INSERT INTO sessions (topic_id, start_time, status, total_active_seconds) VALUES (?, ?, ?, ?)",
+            (topic_id, now, 'active', 0)
         )
 
         self.current_session_id = session_id
         self.is_active = True
+        self.session_start_time = datetime.now()
 
         if self.ping_manager:
             self.ping_manager.reset_idle()
@@ -79,6 +90,15 @@ class SessionController(QObject):
         return Session.from_row(row) if row else None
 
     def pause_session(self, session_id: int):
+        # Сохраняем активное время перед паузой
+        if self.is_active and self.session_start_time:
+            elapsed = int((datetime.now() - self.session_start_time).total_seconds())
+            db.execute(
+                "UPDATE sessions SET total_active_seconds = total_active_seconds + ? WHERE id = ?",
+                (elapsed, session_id)
+            )
+            self.session_start_time = None
+
         db.execute(
             "UPDATE sessions SET status = ? WHERE id = ?",
             ('paused', session_id)
@@ -95,6 +115,7 @@ class SessionController(QObject):
             ('active', session_id)
         )
         self.is_active = True
+        self.session_start_time = datetime.now()  # Запоминаем время возобновления
 
         if self.ping_manager:
             self.ping_manager.reset_idle()
@@ -107,30 +128,32 @@ class SessionController(QObject):
 
         end_time = now_local_iso()
 
-        if duration is not None:
+        # Добавляем последний активный отрезок
+        if self.is_active and self.session_start_time:
+            elapsed = int((datetime.now() - self.session_start_time).total_seconds())
             db.execute(
-                """
-                UPDATE sessions
-                SET end_time = ?, duration_minutes = ?, status = ?
-                WHERE id = ?
-                """,
-                (end_time, duration, 'completed', session_id)
+                "UPDATE sessions SET total_active_seconds = total_active_seconds + ? WHERE id = ?",
+                (elapsed, session_id)
             )
-        else:
-            start_time = datetime.fromisoformat(session.start_time)
-            duration_minutes = int((datetime.now() - start_time).total_seconds() // 60)
+            self.session_start_time = None
 
-            db.execute(
-                """
-                UPDATE sessions
-                SET end_time = ?, duration_minutes = ?, status = ?
-                WHERE id = ?
-                """,
-                (end_time, duration_minutes, 'completed', session_id)
-            )
+        # Получаем общее активное время
+        updated_session = self.get_session(session_id)
+        total_seconds = updated_session.total_active_seconds if updated_session else 0
+        duration_minutes = total_seconds // 60
+
+        db.execute(
+            """
+            UPDATE sessions
+            SET end_time = ?, duration_minutes = ?, status = ?
+            WHERE id = ?
+            """,
+            (end_time, duration_minutes, 'completed', session_id)
+        )
 
         self.is_active = False
         self.current_session_id = None
+        self.session_start_time = None
 
         if self.ping_manager:
             self.ping_manager.idle_timer.stop()

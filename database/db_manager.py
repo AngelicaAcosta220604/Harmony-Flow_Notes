@@ -17,7 +17,7 @@ class DatabaseManager:
     def _get_connection(self) -> sqlite3.Connection:
         """Возвращает подключение к БД с row_factory = dict для удобства."""
         conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row  # строки будут как словари
+        conn.row_factory = sqlite3.Row
         return conn
 
     def _init_tables(self):
@@ -112,7 +112,7 @@ class DatabaseManager:
                 )
             """)
 
-            # sessions (сессии)
+            # sessions (сессии) — С ДОБАВЛЕННОЙ КОЛОНКОЙ total_active_seconds
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS sessions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -122,6 +122,7 @@ class DatabaseManager:
                     duration_minutes INTEGER,
                     status TEXT DEFAULT 'active',
                     created_at TIMESTAMP,
+                    total_active_seconds INTEGER DEFAULT 0,
                     FOREIGN KEY (topic_id) REFERENCES topics (id)
                 )
             """)
@@ -160,6 +161,12 @@ class DatabaseManager:
                     setting_value TEXT NOT NULL
                 )
             """)
+
+            # Добавляем колонку total_active_seconds для существующих БД (миграция)
+            cursor.execute("PRAGMA table_info(sessions)")
+            existing_columns = [col[1] for col in cursor.fetchall()]
+            if 'total_active_seconds' not in existing_columns:
+                cursor.execute("ALTER TABLE sessions ADD COLUMN total_active_seconds INTEGER DEFAULT 0")
 
             # Добавляем настройки по умолчанию, если их нет
             default_settings = [
