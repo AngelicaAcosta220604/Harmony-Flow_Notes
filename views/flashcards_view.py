@@ -2,10 +2,9 @@
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-    QLabel, QScrollArea, QFrame, QComboBox, QDialog
+    QLabel, QScrollArea, QFrame, QComboBox, QDialog, QMessageBox
 )
 from PySide6.QtCore import Qt, Signal
-from widgets.silent_message_box import QMessageBox
 from widgets.card_type_dialog import CardTypeDialog
 
 class FlashcardsView(QWidget):

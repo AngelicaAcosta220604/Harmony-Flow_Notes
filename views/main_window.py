@@ -2,9 +2,8 @@
 
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QStackedWidget, QLabel, QFrame
+    QPushButton, QStackedWidget, QLabel, QFrame, QMessageBox
 )
-from widgets.silent_message_box import QMessageBox
 from PySide6.QtCore import Qt
 
 from views.flashcards_view import FlashcardsView

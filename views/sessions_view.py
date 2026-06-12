@@ -2,9 +2,8 @@
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-    QLabel, QScrollArea, QFrame
+    QLabel, QScrollArea, QFrame, QMessageBox
 )
-from widgets.silent_message_box import QMessageBox
 from PySide6.QtCore import Qt, Signal
 from datetime import datetime
 

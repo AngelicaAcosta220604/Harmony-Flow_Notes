@@ -3,11 +3,10 @@
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QTextEdit, QPushButton,  QInputDialog,
+    QTextEdit, QPushButton, QInputDialog,
     QFrame, QStackedWidget, QScrollArea, QSizePolicy,
-    QLineEdit, QComboBox  # <-- ОБА ДОЛЖНЫ БЫТЬ ЗДЕСЬ
+    QLineEdit, QComboBox, QMessageBox  # <-- ОБА ДОЛЖНЫ БЫТЬ ЗДЕСЬ
 )
-from widgets.silent_message_box import QMessageBox
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 

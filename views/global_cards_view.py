@@ -2,9 +2,8 @@
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QFrame, QScrollArea, QCheckBox, QGroupBox
+    QFrame, QScrollArea, QCheckBox, QGroupBox, QMessageBox
 )
-from widgets.silent_message_box import QMessageBox
 from PySide6.QtCore import Qt, Signal
 from widgets.topic_tree_selector import TopicTreeSelector
 from controllers.review_controller import ReviewController

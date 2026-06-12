@@ -2,9 +2,8 @@
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame
+    QFrame, QMessageBox
 )
-from widgets.silent_message_box import QMessageBox
 from PySide6.QtCore import Qt, QTimer, Signal
 from widgets.state_sliders import StateSliders
 from widgets.custom_timer import CustomTimer
