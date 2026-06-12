@@ -33,6 +33,7 @@ class SoundsManager:
             "rain": "rain.mp3",
             "forest": "forest.mp3",
             "cafe": "cafe.mp3",
+            "Chill Lofi": "Chill_Lofi.mp3",
             "white_noise": "white_noise.mp3",
         }
 
