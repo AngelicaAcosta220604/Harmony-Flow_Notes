@@ -31,6 +31,11 @@ class SessionController(QObject):
             self.ping_manager.pingNeeded.connect(self._on_ping_needed)
             self.ping_manager.timeoutReached.connect(self._on_ping_timeout)
 
+    def stop_ping_manager(self):
+        """Останавливает пинг-менеджер"""
+        if self.ping_manager:
+            self.ping_manager.stop()
+
     def _on_ping_needed(self):
         if self.is_active and self.current_session_id:
             self.ping_needed.emit()
@@ -86,21 +91,21 @@ class SessionController(QObject):
 
     def pause_session(self, session_id: int, auto: bool = False):
         print(f"[DEBUG] pause_session: сессия {session_id}, auto={auto}")
+        print(f"[DEBUG] is_active={self.is_active}, session_resume_time={self.session_resume_time}")
 
         if self.is_active and self.session_resume_time and self.current_session_id == session_id:
-            # Считаем, сколько прошло с момента последнего возобновления
             elapsed = int((datetime.now() - self.session_resume_time).total_seconds())
-            print(f"[DEBUG] pause: прошло {elapsed} сек с момента последнего возобновления")
+            print(f"[DEBUG] pause: прошло {elapsed} сек")
 
-            # Добавляем этот отрезок к общему времени
             db.execute(
                 "UPDATE sessions SET total_active_seconds = total_active_seconds + ? WHERE id = ?",
                 (elapsed, session_id)
             )
             self.session_resume_time = None
             self._print_total_active(session_id)
+        else:
+            print(f"[DEBUG] pause: условие не выполнено, время НЕ добавлено")
 
-        # Меняем статус
         new_status = 'auto_paused' if auto else 'paused'
         db.execute(
             "UPDATE sessions SET status = ? WHERE id = ?",
@@ -173,7 +178,7 @@ class SessionController(QObject):
 
         if self.ping_manager:
             self.ping_manager.idle_timer.stop()
-            self.ping_manager.timeout_timer.stop()
+            self.ping_manager.response_timer.stop()  # ← ИСПРАВЛЕНО
 
         if topic_id:
             self._update_topic_timestamp(topic_id)
@@ -276,3 +281,34 @@ class SessionController(QObject):
             session = rows[0]
             return True, session['id'], session['status'], session['topic_id']
         return False, None, None, None
+
+    def check_and_pause_active_session(self):
+        """Проверяет и ставит на паузу любую активную сессию (при запуске приложения)"""
+        rows = db.fetchall(
+            "SELECT id, status FROM sessions WHERE status = 'active'"
+        )
+        for row in rows:
+            session_id = row['id']
+            self.pause_session(session_id)
+            print(f"[DEBUG] При запуске: сессия {session_id} переведена в статус 'paused'")
+
+    def save_slider_values(self, session_id: int, concentration: int, energy: int, interest: int):
+        """Сохраняет позиции ползунков в БД"""
+        db.execute(
+            "UPDATE sessions SET concentration = ?, energy = ?, interest = ? WHERE id = ?",
+            (concentration, energy, interest, session_id)
+        )
+
+    def get_slider_values(self, session_id: int) -> dict:
+        """Возвращает сохранённые позиции ползунков"""
+        row = db.fetchone(
+            "SELECT concentration, energy, interest FROM sessions WHERE id = ?",
+            (session_id,)
+        )
+        if row:
+            return {
+                "concentration": row.get("concentration", 50),
+                "energy": row.get("energy", 50),
+                "interest": row.get("interest", 50)
+            }
+        return {"concentration": 50, "energy": 50, "interest": 50}

@@ -112,7 +112,7 @@ class DatabaseManager:
                 )
             """)
 
-            # sessions (сессии) — С ДОБАВЛЕННОЙ КОЛОНКОЙ total_active_seconds
+            # sessions (сессии) — с колонками total_active_seconds и ползунками
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS sessions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -123,6 +123,9 @@ class DatabaseManager:
                     status TEXT DEFAULT 'active',
                     created_at TIMESTAMP,
                     total_active_seconds INTEGER DEFAULT 0,
+                    concentration INTEGER DEFAULT 50,
+                    energy INTEGER DEFAULT 50,
+                    interest INTEGER DEFAULT 50,
                     FOREIGN KEY (topic_id) REFERENCES topics (id)
                 )
             """)
@@ -162,11 +165,18 @@ class DatabaseManager:
                 )
             """)
 
-            # Добавляем колонку total_active_seconds для существующих БД (миграция)
+            # Добавляем колонки для существующих БД (миграция)
             cursor.execute("PRAGMA table_info(sessions)")
             existing_columns = [col[1] for col in cursor.fetchall()]
+
             if 'total_active_seconds' not in existing_columns:
                 cursor.execute("ALTER TABLE sessions ADD COLUMN total_active_seconds INTEGER DEFAULT 0")
+            if 'concentration' not in existing_columns:
+                cursor.execute("ALTER TABLE sessions ADD COLUMN concentration INTEGER DEFAULT 50")
+            if 'energy' not in existing_columns:
+                cursor.execute("ALTER TABLE sessions ADD COLUMN energy INTEGER DEFAULT 50")
+            if 'interest' not in existing_columns:
+                cursor.execute("ALTER TABLE sessions ADD COLUMN interest INTEGER DEFAULT 50")
 
             # Добавляем настройки по умолчанию, если их нет
             default_settings = [

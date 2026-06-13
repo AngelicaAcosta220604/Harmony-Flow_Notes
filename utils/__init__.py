@@ -7,7 +7,6 @@ from .helpers import *
 from .hotkeys_manager import HotkeysManager
 from .import_manager import ImportManager
 from .notification_manager import NotificationManager
-from .ping_manager import PingManager
 from .sound_manager import SoundsManager
 from .string_utils import *
 from .sync_manager import SyncManager
