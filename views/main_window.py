@@ -11,6 +11,7 @@ from datetime import datetime
 from views.flashcards_view import FlashcardsView
 from widgets.tree_widget import TreeWidget
 from views.focus_active_view import FocusActiveView
+from views.focus_setup_view import FocusSetupView  # ← добавить импорт
 from controllers.topic_controller import TopicController
 from controllers.note_controller import NoteController
 from controllers.flashcard_controller import FlashcardController
@@ -88,15 +89,24 @@ class MainWindow(QMainWindow):
         self.tree_widget.topic_selected.connect(self.on_topic_selected)
         self.tree_widget.topics_changed.connect(self.on_topics_changed)
 
-        self.focus_setup_view = self._create_focus_setup_view()
+        # Страница 2: Экран выбора темы для сессии (НОВЫЙ)
+        self.focus_setup_view = FocusSetupView(
+            session_controller=self.session_controller,
+            settings_controller=None,
+            topic_controller=self.topic_controller,
+            parent=self
+        )
+        self.focus_setup_view.start_session_requested.connect(self._handle_session_start)
+        self.focus_setup_view.resume_session_requested.connect(self.resume_session_from_history)
 
+        # Страница 3: Экран активной сессии
         self.focus_active_view = FocusActiveView(
             session_controller=self.session_controller,
             note_controller=self.note_controller,
             topic_controller=self.topic_controller
         )
         self.focus_active_view.session_ended.connect(self.on_session_ended)
-        self.focus_active_view.back_to_topics.connect(lambda: self.stack.setCurrentIndex(1))
+        self.focus_active_view.back_to_topics.connect(lambda: self.stack.setCurrentWidget(self.focus_setup_view))
 
         page_tasks = QLabel("✅ Задачи\n\nСписок задач с дедлайнами")
         page_tasks.setAlignment(Qt.AlignCenter)
@@ -134,43 +144,19 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(sidebar)
         main_layout.addWidget(self.stack, 1)
 
+        # ================== Подключаем кнопки ==================
         btn_home.clicked.connect(lambda: self.stack.setCurrentIndex(0))
         btn_topics.clicked.connect(lambda: self.stack.setCurrentIndex(1))
-        btn_focus.clicked.connect(lambda: self.stack.setCurrentIndex(2))
+        btn_focus.clicked.connect(self._on_focus_clicked)  # ← изменено
         btn_tasks.clicked.connect(lambda: self.stack.setCurrentIndex(4))
         btn_cards.clicked.connect(lambda: self.stack.setCurrentWidget(self.global_cards_view))
         btn_analytics.clicked.connect(lambda: self.stack.setCurrentIndex(7))
         btn_settings.clicked.connect(lambda: self.stack.setCurrentIndex(8))
 
+        # ================== Настройка пинга ==================
         self.ping_manager = PingManager(idle_ms=15 * 60 * 1000)
         self.session_controller.set_ping_manager(self.ping_manager)
         self.session_controller.ping_needed.connect(self.show_ping_dialog)
-
-    def _create_focus_setup_view(self):
-        from PySide6.QtWidgets import QVBoxLayout, QComboBox, QPushButton, QLabel
-
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-
-        layout.addWidget(QLabel("Выберите тему для фокус-сессии:"))
-
-        self.session_topic_combo = QComboBox()
-        self.refresh_topic_combo()
-        layout.addWidget(self.session_topic_combo)
-
-        btn_start = QPushButton("▶ Начать сессию")
-        btn_start.clicked.connect(self.start_session_from_setup)
-        layout.addWidget(btn_start)
-
-        layout.addStretch()
-        return widget
-
-    def refresh_topic_combo(self):
-        self.session_topic_combo.clear()
-        topics = self.topic_controller.get_all_topics()
-        for topic in topics:
-            if topic.type == "topic":
-                self.session_topic_combo.addItem(topic.name, topic.id)
 
     # ================== ЕДИНЫЙ МЕТОД ДЛЯ ЗАПУСКА/ВОЗОБНОВЛЕНИЯ СЕССИИ ==================
     def _handle_session_start(self, topic_id: int, topic_name: str):
@@ -188,39 +174,19 @@ class MainWindow(QMainWindow):
                 QMessageBox.Yes | QMessageBox.No
             )
             if reply == QMessageBox.Yes:
-                # Да = завершить старую и начать новую
                 self.session_controller.end_session(session_id)
                 self.focus_active_view.start_session(topic_id, topic_name)
             else:
-                # Нет = продолжить существующую
                 self.focus_active_view.resume_existing_session(session_id, topic_id, topic_name)
         else:
             self.focus_active_view.start_session(topic_id, topic_name)
 
         self.stack.setCurrentWidget(self.focus_active_view)
 
-    def start_session_from_setup(self):
-        current_index = self.session_topic_combo.currentIndex()
-        if current_index < 0:
-            SilentMessageBox.warning(self, "Ошибка", "Сначала создайте хотя бы одну тему!")
-            return
-
-        topic_id = self.session_topic_combo.currentData()
-        topic_name = self.session_topic_combo.currentText()
-        self._handle_session_start(topic_id, topic_name)
-
-    def _start_session_from_topic(self, topic_id: int, topic_name: str):
-        """Запускает сессию из темы"""
-        # Обновляем комбобокс
-        index = self.session_topic_combo.findData(topic_id)
-        if index >= 0:
-            self.session_topic_combo.setCurrentIndex(index)
-
-        self._handle_session_start(topic_id, topic_name)
-
     def on_session_ended(self, session_id: int):
-        self.stack.setCurrentIndex(2)
-        self.refresh_topic_combo()
+        print(f"[DEBUG] on_session_ended: session_id={session_id}")
+        self.stack.setCurrentWidget(self.focus_setup_view)
+        self.focus_setup_view.refresh()  # обновляем список тем и проверяем активные сессии
         self.tree_widget.load_topics()
         self.refresh_global_cards()
 
@@ -231,6 +197,7 @@ class MainWindow(QMainWindow):
         if dialog.exec():
             self.session_controller.user_responded_to_ping()
 
+    # ================== ОБРАБОТКА ВЫБОРА ТЕМЫ ==================
     def on_topic_selected(self, topic_id: int):
         topic_view = TopicView(
             topic_id=topic_id,
@@ -241,11 +208,11 @@ class MainWindow(QMainWindow):
             session_controller=self.session_controller
         )
         topic_view.back_requested.connect(lambda: self.stack.setCurrentIndex(1))
-        topic_view.start_session_requested.connect(self._start_session_from_topic)
+        topic_view.start_session_requested.connect(self._handle_session_start)
         topic_view.resume_existing_session_requested.connect(self.resume_session_from_history)
         topic_view.show_session_analytics.connect(self._show_session_analytics)
         topic_view.cards_updated.connect(self.refresh_global_cards)
-        topic_view.topic_updated.connect(self.refresh_topic_combo)
+        topic_view.topic_updated.connect(self.focus_setup_view.refresh)  # ← обновляем экран фокуса
         topic_view.topic_updated.connect(self.refresh_global_cards)
         self.stack.addWidget(topic_view)
         self.stack.setCurrentWidget(topic_view)
@@ -262,7 +229,7 @@ class MainWindow(QMainWindow):
             self.global_cards_view.refresh()
 
     def on_topics_changed(self):
-        self.refresh_topic_combo()
+        self.focus_setup_view.refresh()  # ← обновляем экран фокуса
         self.refresh_global_cards()
         self.tree_widget.load_topics()
 
@@ -272,14 +239,6 @@ class MainWindow(QMainWindow):
             self.focus_active_view.resume_existing_session(session_id, session.topic_id, topic_name)
             self.stack.setCurrentWidget(self.focus_active_view)
 
-    def _get_status_text(self, status: str) -> str:
-        status_map = {
-            "active": "активную",
-            "paused": "приостановленную",
-            "auto_paused": "автоматически приостановленную"
-        }
-        return status_map.get(status, "незавершённую")
-
     def _get_status_text_for_dialog(self, status: str) -> str:
         status_map = {
             "active": "активную",
@@ -287,3 +246,9 @@ class MainWindow(QMainWindow):
             "auto_paused": "автоматически приостановленную"
         }
         return status_map.get(status, "незавершённую")
+
+    def _on_focus_clicked(self):
+        """Переключение на вкладку фокуса с обновлением"""
+        print("[DEBUG] Переключение на вкладку Фокус")
+        self.focus_setup_view.refresh()
+        self.stack.setCurrentWidget(self.focus_setup_view)
