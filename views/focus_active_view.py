@@ -1,17 +1,18 @@
 # views/focus_active_view.py
 
-from datetime import datetime  # ← ИСПРАВИТЬ: импортируем класс datetime
+from datetime import datetime
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QMessageBox,
+    QFrame, QMessageBox, QDialog,
 )
-from widgets.silent_dialog import SilentMessageBox
 from PySide6.QtCore import Qt, QTimer, Signal
+from widgets.silent_dialog import SilentMessageBox
 from widgets.state_sliders import StateSliders
 from widgets.custom_timer import CustomTimer
 from widgets.music_widget import MusicWidget
 from widgets.quick_note_dialog import QuickNoteDialog
 from widgets.ping_dialog import PingDialog
+from widgets.ping_manager import PingManager
 
 
 class FocusActiveView(QWidget):
@@ -29,6 +30,15 @@ class FocusActiveView(QWidget):
         self.current_session_id = None
         self.current_topic_id = None
         self.current_topic_name = ""
+        self.is_active = False
+
+        # Создаём PingManager
+        self.ping_manager = PingManager(idle_minutes=15, timeout_seconds=30)
+        self.ping_manager.pingNeeded.connect(self._show_ping_dialog)
+        self.ping_manager.timeoutReached.connect(self._auto_pause_from_ping)
+
+        # Передаём ping_manager в session_controller
+        self.session_controller.set_ping_manager(self.ping_manager)
 
         self.setup_ui()
         self.connect_signals()
@@ -41,7 +51,6 @@ class FocusActiveView(QWidget):
 
         # ========== Верхняя панель ==========
         top_bar = QHBoxLayout()
-
         self.back_button = QPushButton("← Выйти из сессии")
         self.back_button.setStyleSheet("""
             QPushButton {
@@ -51,73 +60,90 @@ class FocusActiveView(QWidget):
                 border: none;
                 border-radius: 6px;
             }
-            QPushButton:hover {
-                background-color: #CC0000;
-            }
+            QPushButton:hover { background-color: #CC0000; }
         """)
         top_bar.addWidget(self.back_button)
-
         top_bar.addStretch()
-
         self.topic_label = QLabel()
         self.topic_label.setStyleSheet("font-size: 18px; font-weight: bold;")
         top_bar.addWidget(self.topic_label)
-
         top_bar.addStretch()
-
         main_layout.addLayout(top_bar)
 
         # ========== Центр: Таймер ==========
-        timer_container = QFrame()
-        timer_container.setStyleSheet("""
-            QFrame {
-                border: 2px solid #DDD;
-                border-radius: 15px;
-                background-color: #F9F9F9;
+        self.timer = CustomTimer()
+        main_layout.addWidget(self.timer, alignment=Qt.AlignCenter)
+
+        # ========== Кнопки управления под таймером ==========
+        control_buttons = QHBoxLayout()
+        control_buttons.setAlignment(Qt.AlignCenter)
+        control_buttons.setSpacing(15)
+
+        # Кнопка паузы/плея
+        self.play_pause_btn = QPushButton("⏸")
+        self.play_pause_btn.setFixedSize(50, 50)
+        self.play_pause_btn.setCursor(Qt.PointingHandCursor)
+        self.play_pause_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                color: #2C3E50;
+                border: none;
+                font-size: 28px;
+            }
+            QPushButton:hover {
+                color: #FF9800;
             }
         """)
-        timer_layout = QVBoxLayout(timer_container)
+        control_buttons.addWidget(self.play_pause_btn)
 
-        self.timer = CustomTimer()
-        timer_layout.addWidget(self.timer, alignment=Qt.AlignCenter)
+        # Кнопка стоп
+        self.stop_btn = QPushButton("⬤")
+        self.stop_btn.setFixedSize(50, 50)
+        self.stop_btn.setCursor(Qt.PointingHandCursor)
+        self.stop_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                color: #E74C3C;
+                border: none;
+                font-size: 24px;
+            }
+            QPushButton:hover {
+                color: #C0392B;
+            }
+        """)
+        control_buttons.addWidget(self.stop_btn)
 
-        main_layout.addWidget(timer_container)
+        main_layout.addLayout(control_buttons)
+        main_layout.addSpacing(20)
 
         # ========== Нижняя часть ==========
         bottom_row = QHBoxLayout()
         bottom_row.setSpacing(30)
 
-        # ----- Левая колонка: Ползунки -----
+        # ----- Левая колонка: Ползунки (без обводки) -----
         left_panel = QFrame()
-        left_panel.setStyleSheet("""
-            QFrame {
-                border: 1px solid #DDD;
-                border-radius: 10px;
-                padding: 15px;
-            }
-        """)
+        left_panel.setStyleSheet("QFrame { background-color: transparent; }")
         left_layout = QVBoxLayout(left_panel)
-        left_layout.addWidget(QLabel("📊 Твоё состояние"))
+        left_layout.setSpacing(15)
+
+        # Заголовок
+        title_label = QLabel("📊 Твоё состояние")
+        title_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #2C3E50; margin-bottom: 5px;")
+        left_layout.addWidget(title_label)
 
         self.state_sliders = StateSliders()
         left_layout.addWidget(self.state_sliders)
 
-        hint_label = QLabel("💡 Меняй ползунки, когда чувствуешь изменения")
-        hint_label.setStyleSheet("color: gray; font-size: 11px;")
+        hint_label = QLabel("💡 Меняй ползунки — изменения сохранятся автоматически")
         hint_label.setWordWrap(True)
+        hint_label.setStyleSheet("color: #999; font-size: 10px; margin-top: 5px;")
         left_layout.addWidget(hint_label)
 
         bottom_row.addWidget(left_panel, stretch=2)
 
         # ----- Правая колонка: Кнопки -----
         right_panel = QFrame()
-        right_panel.setStyleSheet("""
-            QFrame {
-                border: 1px solid #DDD;
-                border-radius: 10px;
-                padding: 15px;
-            }
-        """)
+        right_panel.setStyleSheet("QFrame { background-color: transparent; }")
         right_layout = QVBoxLayout(right_panel)
         right_layout.setSpacing(15)
 
@@ -133,59 +159,20 @@ class FocusActiveView(QWidget):
             QPushButton:hover { background-color: #45a049; }
         """)
         right_layout.addWidget(self.quick_note_btn)
-        # После кнопки "Быстрая запись", перед "Пауза"
-        self.save_state_btn = QPushButton("💾 Сохранить состояние")
-        self.save_state_btn.setStyleSheet("""
-            QPushButton {
-                padding: 12px;
-                background-color: #9C27B0;
-                color: white;
-                border: none;
-                border-radius: 8px;
-            }
-            QPushButton:hover { background-color: #7B1FA2; }
-        """)
-        self.save_state_btn.clicked.connect(self.log_current_state)
-        right_layout.addWidget(self.save_state_btn)
-        self.pause_btn = QPushButton("⏸ Пауза")
-        self.pause_btn.setStyleSheet("""
-            QPushButton {
-                padding: 12px;
-                background-color: #FF9800;
-                color: white;
-                border: none;
-                border-radius: 8px;
-            }
-            QPushButton:hover { background-color: #e68900; }
-        """)
-        right_layout.addWidget(self.pause_btn)
-
-        self.end_btn = QPushButton("⏹ Завершить")
-        self.end_btn.setStyleSheet("""
-            QPushButton {
-                padding: 12px;
-                background-color: #f44336;
-                color: white;
-                border: none;
-                border-radius: 8px;
-            }
-            QPushButton:hover { background-color: #da190b; }
-        """)
-        right_layout.addWidget(self.end_btn)
 
         right_layout.addStretch()
-
         self.music_widget = MusicWidget()
         right_layout.addWidget(self.music_widget)
 
         bottom_row.addWidget(right_panel, stretch=1)
+
         main_layout.addLayout(bottom_row)
 
     def connect_signals(self):
         """Подключает сигналы"""
         self.quick_note_btn.clicked.connect(self.show_quick_note_dialog)
-        self.pause_btn.clicked.connect(self.toggle_pause)
-        self.end_btn.clicked.connect(self.end_session)
+        self.play_pause_btn.clicked.connect(self.toggle_pause)
+        self.stop_btn.clicked.connect(self.end_session)
         self.back_button.clicked.connect(self.confirm_exit)
 
     # =========================================================
@@ -200,45 +187,67 @@ class FocusActiveView(QWidget):
 
         self.current_session_id = self.session_controller.start_session(topic_id)
         self.timer.start()
+        self.is_active = True
 
-        self.pause_btn.setText("⏸ Пауза")
-        self.pause_btn.setEnabled(True)
-        self.end_btn.setEnabled(True)
+        # Сбрасываем таймер бездействия
+        self.ping_manager.reset_idle()
+
+        # Подключаем автосохранение ползунков
+        self.state_sliders.connect_save_callback(self._auto_save_state)
+
+        self.play_pause_btn.setText("⏸")
+        self.play_pause_btn.setEnabled(True)
+        self.stop_btn.setEnabled(True)
+
+    def _auto_save_state(self, metric: str, value: int):
+        """Автоматическое сохранение состояния (вызывается не чаще 5 минут для каждого ползунка отдельно)"""
+        if not self.current_session_id:
+            return
+
+        minute = self.timer.get_seconds() // 60
+
+        # Сбрасываем таймер бездействия при изменении ползунков
+        self.ping_manager.reset_idle()
+
+        self.session_controller.log_state(
+            self.current_session_id,
+            metric,
+            value,
+            minute
+        )
+        print(f"[DEBUG] Автосохранение: {metric}={value}, минута={minute}")
+
+    def _show_ping_dialog(self):
+        """Показывает диалог проверки активности"""
+        dialog = PingDialog(self)
+        if dialog.exec() == QDialog.Accepted:
+            self.ping_manager.user_confirmed()
+        else:
+            self._auto_pause_from_ping()
+
+    def _auto_pause_from_ping(self):
+        """Автоматическая пауза при бездействии"""
+        if self.current_session_id and self.is_active:
+            self.timer.pause()
+            self.session_controller.pause_session(self.current_session_id)
+            self.play_pause_btn.setText("▶")
+            self.is_active = False
+            print("[DEBUG] Авто-пауза из-за бездействия")
 
     def toggle_pause(self):
         """Пауза / Возобновление"""
-        if not self.timer.running:
-            # Возобновляем — таймер продолжает с текущего значения
-            self.timer.resume()
-            self.session_controller.resume_session(self.current_session_id)
-            self.pause_btn.setText("⏸ Пауза")
-            self.pause_btn.setStyleSheet("""
-                QPushButton {
-                    padding: 12px;
-                    background-color: #FF9800;
-                    color: white;
-                    border: none;
-                    border-radius: 8px;
-                }
-                QPushButton:hover { background-color: #e68900; }
-            """)
-            self.is_active = True
-        else:
-            # Ставим на паузу — замораживаем время
+        if self.timer.running:
             self.timer.pause()
             self.session_controller.pause_session(self.current_session_id)
-            self.pause_btn.setText("▶ Возобновить")
-            self.pause_btn.setStyleSheet("""
-                QPushButton {
-                    padding: 12px;
-                    background-color: #4CAF50;
-                    color: white;
-                    border: none;
-                    border-radius: 8px;
-                }
-                QPushButton:hover { background-color: #45a049; }
-            """)
+            self.play_pause_btn.setText("▶")
             self.is_active = False
+        else:
+            self.timer.resume()
+            self.session_controller.resume_session(self.current_session_id)
+            self.play_pause_btn.setText("⏸")
+            self.is_active = True
+        # Сбрасываем таймер бездействия
+        self.ping_manager.reset_idle()
 
     def end_session(self):
         """Завершает сессию"""
@@ -246,17 +255,19 @@ class FocusActiveView(QWidget):
         duration_seconds = self.timer.get_seconds()
         duration_minutes = duration_seconds // 60
 
+        self.ping_manager.stop()
         self.session_controller.end_session(self.current_session_id, duration=duration_minutes)
 
         SilentMessageBox.information(self,
-            "Сессия завершена",
-            f"Сессия по теме '{self.current_topic_name}' завершена!\n\n"
-            f"⏱ Длительность: {duration_minutes} минут"
-        )
+                                     "Сессия завершена",
+                                     f"Сессия по теме '{self.current_topic_name}' завершена!\n\n"
+                                     f"⏱ Длительность: {duration_minutes} минут"
+                                     )
 
         self.session_ended.emit(self.current_session_id)
         self.current_session_id = None
         self.timer.reset()
+        self.is_active = False
 
     def confirm_exit(self):
         """Подтверждение выхода из сессии (окно закрывается, но сессия продолжается)"""
@@ -265,19 +276,20 @@ class FocusActiveView(QWidget):
                                           "Сессия продолжится в фоне. Вы сможете вернуться позже."
                                           )
         if reply == QMessageBox.Yes:
-            # Просто закрываем окно, сессия остаётся активной
             self.back_to_topics.emit()
 
     # =========================================================
-    # ЛОГИРОВАНИЕ СОСТОЯНИЯ (вызывается вручную)
+    # ЛОГИРОВАНИЕ СОСТОЯНИЯ
     # =========================================================
 
     def log_current_state(self):
-        """Сохраняет текущие значения ползунков в БД"""
+        """Сохраняет текущие значения ползунков в БД (вызывается вручную)"""
         if not self.current_session_id:
             return
 
         minute = self.timer.get_seconds() // 60
+
+        self.ping_manager.reset_idle()
 
         self.session_controller.log_state(
             self.current_session_id,
@@ -312,39 +324,34 @@ class FocusActiveView(QWidget):
 
         self.topic_label.setText(f"📚 {topic_name}")
 
-        # Для сессии на паузе — показываем замороженное время, таймер не запускаем
         if session.status in ("paused", "auto_paused"):
             total_seconds = session.total_active_seconds
             print(f"[DEBUG] PAUSED: total_active_seconds={total_seconds}")
             self.timer.set_seconds(total_seconds)
             self.timer.pause()
-            self.pause_btn.setText("▶ Возобновить")
-            self.pause_btn.setStyleSheet("""
+            self.play_pause_btn.setText("▶")
+            self.play_pause_btn.setStyleSheet("""
                 QPushButton {
-                    padding: 12px;
                     background-color: #4CAF50;
                     color: white;
                     border: none;
-                    border-radius: 8px;
+                    border-radius: 30px;
+                    font-size: 24px;
                 }
                 QPushButton:hover { background-color: #45a049; }
             """)
             self.is_active = False
             self.session_controller.is_active = False
 
-        # Для активной сессии — считаем: total_active_seconds + время с момента последнего возобновления
         elif session.status == "active":
-            # Получаем накопленное время из БД
             total_seconds = session.total_active_seconds
             print(f"[DEBUG] ACTIVE: total_active_seconds из БД={total_seconds}")
 
-            # Добавляем время с момента последнего возобновления (если есть)
             if self.session_controller.session_resume_time:
                 elapsed = int((datetime.now() - self.session_controller.session_resume_time).total_seconds())
                 total_seconds += elapsed
                 print(f"[DEBUG] ACTIVE: добавляем отрезок {elapsed} сек, итого={total_seconds}")
 
-                # ВАЖНО: сохраняем обновлённое время в БД, чтобы при следующем входе не добавлять снова
                 from database.db_manager import db
                 db.execute(
                     "UPDATE sessions SET total_active_seconds = ? WHERE id = ?",
@@ -353,25 +360,26 @@ class FocusActiveView(QWidget):
 
             self.timer.set_seconds(total_seconds)
             self.timer.start(total_seconds)
-            self.pause_btn.setText("⏸ Пауза")
-            self.pause_btn.setStyleSheet("""
+            self.play_pause_btn.setText("⏸")
+            self.play_pause_btn.setStyleSheet("""
                 QPushButton {
-                    padding: 12px;
                     background-color: #FF9800;
                     color: white;
                     border: none;
-                    border-radius: 8px;
+                    border-radius: 30px;
+                    font-size: 24px;
                 }
-                QPushButton:hover { background-color: #e68900; }
+                QPushButton:hover { background-color: #F57C00; }
             """)
             self.is_active = True
             self.session_controller.is_active = True
             self.session_controller.current_session_id = session_id
-            # Сбрасываем время последнего возобновления в контроллере
             self.session_controller.session_resume_time = datetime.now()
 
-        self.pause_btn.setEnabled(True)
-        self.end_btn.setEnabled(True)
+        # Сбрасываем таймер бездействия
+        self.ping_manager.reset_idle()
+        self.play_pause_btn.setEnabled(True)
+        self.stop_btn.setEnabled(True)
 
     # =========================================================
     # БЫСТРЫЕ ЗАПИСИ
@@ -379,6 +387,9 @@ class FocusActiveView(QWidget):
 
     def show_quick_note_dialog(self):
         """Показывает диалог быстрой записи"""
+        # Сбрасываем таймер бездействия
+        self.ping_manager.reset_idle()
+
         dialog = QuickNoteDialog(self)
 
         if dialog.exec():
@@ -406,14 +417,12 @@ class FocusActiveView(QWidget):
         self.layout().addWidget(label)
         QTimer.singleShot(2000, label.deleteLater)
 
-    # =========================================================
-    # ЖИЗНЕННЫЙ ЦИКЛ
-    # =========================================================
-
     def refresh(self):
         pass
 
     def cleanup(self):
+        """Очистка при закрытии окна"""
+        self.ping_manager.stop()
         if self.current_session_id and self.timer.running:
             self.session_controller.delete_session(self.current_session_id)
             self.timer.reset()
