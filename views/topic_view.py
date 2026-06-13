@@ -178,10 +178,18 @@ class TopicView(QWidget):
         # Страница 4: Задачи
         # ---------------------------------------------------------
         self.tasks_view = TasksView(
-            task_controller=task_controller,
-            topic_id=topic_id
+            task_controller=self.task_controller,
+            topic_id=self.topic_id,
+            parent=self
         )
-        self.stack.addWidget(self.tasks_view)
+        # Подключаем сигналы обновления
+        self.tasks_view.tasks_updated.connect(self.topic_updated.emit)
+        self.tasks_view.task_changed.connect(lambda tid: self.topic_updated.emit())
+        self.tasks_view.task_deleted.connect(lambda tid: self.topic_updated.emit())
+
+        self.stack.addWidget(self.tasks_view)  # ← ЭТА СТРОКА ДОЛЖНА БЫТЬ!
+
+
 
         # ---------------------------------------------------------
         # Страница 5: Сессии

@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (
     QPushButton, QStackedWidget, QLabel, QFrame, QMessageBox,
 )
 
+from views.global_tasks_view import GlobalTasksView
 from widgets.ping_manager import PingManager
 from widgets.silent_dialog import SilentMessageBox
 from PySide6.QtCore import Qt
@@ -115,8 +116,11 @@ class MainWindow(QMainWindow):
         self.focus_active_view.session_ended.connect(self.on_session_ended)
         self.focus_active_view.back_to_topics.connect(lambda: self.stack.setCurrentWidget(self.focus_setup_view))
 
-        page_tasks = QLabel("✅ Задачи\n\nСписок задач с дедлайнами")
-        page_tasks.setAlignment(Qt.AlignCenter)
+        self.global_tasks_view = GlobalTasksView(
+            task_controller=self.task_controller,
+            topic_controller=self.topic_controller,
+            parent=self
+        )
 
         self.global_cards_view = GlobalCardsView(
             flashcard_controller=self.flashcard_controller,
@@ -142,7 +146,7 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.tree_widget)  # индекс 1
         self.stack.addWidget(self.focus_setup_view)  # индекс 2
         self.stack.addWidget(self.focus_active_view)  # индекс 3
-        self.stack.addWidget(page_tasks)  # индекс 4
+        self.stack.addWidget(self.global_tasks_view)  # индекс 4
         self.stack.addWidget(self.global_cards_view)  # индекс 5
         self.stack.addWidget(self.review_session_view)  # индекс 6
         self.stack.addWidget(page_analytics)  # индекс 7
@@ -155,7 +159,7 @@ class MainWindow(QMainWindow):
         btn_home.clicked.connect(lambda: self.stack.setCurrentIndex(0))
         btn_topics.clicked.connect(lambda: self.stack.setCurrentIndex(1))
         btn_focus.clicked.connect(self._on_focus_clicked)  # ← изменено
-        btn_tasks.clicked.connect(lambda: self.stack.setCurrentIndex(4))
+        btn_tasks.clicked.connect(lambda: self.stack.setCurrentWidget(self.global_tasks_view))
         btn_cards.clicked.connect(lambda: self.stack.setCurrentWidget(self.global_cards_view))
         btn_analytics.clicked.connect(lambda: self.stack.setCurrentIndex(7))
         btn_settings.clicked.connect(lambda: self.stack.setCurrentIndex(8))
