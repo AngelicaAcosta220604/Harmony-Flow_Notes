@@ -189,6 +189,12 @@ class FocusActiveView(QWidget):
         self.timer.start()
         self.is_active = True
 
+        # Сбрасываем ползунки на 50 для новой сессии
+        self.state_sliders.set_all(50, 50, 50)
+
+        # Сохраняем начальные позиции в БД
+        self.session_controller.save_slider_values(self.current_session_id, 50, 50, 50)
+
         # Сбрасываем таймер бездействия
         self.ping_manager.reset_idle()
 
@@ -200,20 +206,25 @@ class FocusActiveView(QWidget):
         self.stop_btn.setEnabled(True)
 
     def _auto_save_state(self, metric: str, value: int):
-        """Автоматическое сохранение состояния (вызывается не чаще 5 минут для каждого ползунка отдельно)"""
+        """Автоматическое сохранение состояния"""
         if not self.current_session_id:
             return
 
         minute = self.timer.get_seconds() // 60
-
-        # Сбрасываем таймер бездействия при изменении ползунков
         self.ping_manager.reset_idle()
 
+        # Сохраняем лог состояния
         self.session_controller.log_state(
+            self.current_session_id, metric, value, minute
+        )
+
+        # Сохраняем текущую позицию ползунка в сессию
+        all_values = self.state_sliders.get_all_values()
+        self.session_controller.save_slider_values(
             self.current_session_id,
-            metric,
-            value,
-            minute
+            all_values["concentration"],
+            all_values["energy"],
+            all_values["interest"]
         )
         print(f"[DEBUG] Автосохранение: {metric}={value}, минута={minute}")
 
@@ -324,6 +335,16 @@ class FocusActiveView(QWidget):
 
         self.topic_label.setText(f"📚 {topic_name}")
 
+        # Восстанавливаем позиции ползунков из БД
+        slider_values = self.session_controller.get_slider_values(session_id)
+        self.state_sliders.set_all(
+            slider_values["concentration"],
+            slider_values["energy"],
+            slider_values["interest"]
+        )
+        print(
+            f"[DEBUG] Восстановлены ползунки: концентрация={slider_values['concentration']}, энергия={slider_values['energy']}, интерес={slider_values['interest']}")
+
         if session.status in ("paused", "auto_paused"):
             total_seconds = session.total_active_seconds
             print(f"[DEBUG] PAUSED: total_active_seconds={total_seconds}")
@@ -376,6 +397,9 @@ class FocusActiveView(QWidget):
             self.session_controller.current_session_id = session_id
             self.session_controller.session_resume_time = datetime.now()
 
+            print(f"[DEBUG] total_active_seconds из БД = {session.total_active_seconds}")
+            print(f"[DEBUG] timer.get_seconds() = {self.timer.get_seconds()}")
+
         # Сбрасываем таймер бездействия
         self.ping_manager.reset_idle()
         self.play_pause_btn.setEnabled(True)
@@ -426,3 +450,37 @@ class FocusActiveView(QWidget):
         if self.current_session_id and self.timer.running:
             self.session_controller.delete_session(self.current_session_id)
             self.timer.reset()
+
+    def stop_ping_manager(self):
+        """Останавливает пинг-менеджер (вызывается при закрытии)"""
+        self.ping_manager.stop()
+
+    def force_save_state(self):
+        """Принудительно сохраняет текущее состояние сессии (вызывается при закрытии)"""
+        if self.current_session_id and self.is_active:
+            # Сохраняем текущие значения ползунков
+            all_values = self.state_sliders.get_all_values()
+            self.session_controller.save_slider_values(
+                self.current_session_id,
+                all_values["concentration"],
+                all_values["energy"],
+                all_values["interest"]
+            )
+            print(f"[DEBUG] Принудительно сохранены ползунки: {all_values}")
+
+    def force_save_time(self):
+        """Принудительно сохраняет текущее время сессии в БД"""
+        if self.current_session_id and self.timer.running:
+            elapsed = self.timer.get_seconds()
+            if elapsed > 0:
+                from database.db_manager import db
+                # Получаем текущее total_active_seconds
+                current = db.fetchone("SELECT total_active_seconds FROM sessions WHERE id = ?",
+                                      (self.current_session_id,))
+                current_total = current["total_active_seconds"] if current else 0
+                new_total = current_total + elapsed
+                db.execute(
+                    "UPDATE sessions SET total_active_seconds = ? WHERE id = ?",
+                    (new_total, self.current_session_id)
+                )
+                print(f"[DEBUG] Принудительно сохранено время: +{elapsed} сек, всего={new_total} сек")

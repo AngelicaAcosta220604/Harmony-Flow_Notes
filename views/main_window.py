@@ -4,6 +4,8 @@ from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QStackedWidget, QLabel, QFrame, QMessageBox,
 )
+
+from widgets.ping_manager import PingManager
 from widgets.silent_dialog import SilentMessageBox
 from PySide6.QtCore import Qt
 from datetime import datetime
@@ -18,7 +20,6 @@ from controllers.flashcard_controller import FlashcardController
 from controllers.task_controller import TaskController
 from controllers.session_controller import SessionController
 from views.topic_view import TopicView
-from utils.ping_manager import PingManager
 
 from views.global_cards_view import GlobalCardsView
 from views.review_session_view import ReviewSessionView
@@ -98,6 +99,8 @@ class MainWindow(QMainWindow):
         )
         self.focus_setup_view.start_session_requested.connect(self._handle_session_start)
         self.focus_setup_view.resume_session_requested.connect(self.resume_session_from_history)
+        # После создания session_controller
+        self.session_controller.check_and_pause_active_session()
 
         # Страница 3: Экран активной сессии
         self.focus_active_view = FocusActiveView(
@@ -154,7 +157,7 @@ class MainWindow(QMainWindow):
         btn_settings.clicked.connect(lambda: self.stack.setCurrentIndex(8))
 
         # ================== Настройка пинга ==================
-        self.ping_manager = PingManager(idle_ms=15 * 60 * 1000)
+        self.ping_manager = PingManager(idle_minutes=15)
         self.session_controller.set_ping_manager(self.ping_manager)
         self.session_controller.ping_needed.connect(self.show_ping_dialog)
 
@@ -252,3 +255,21 @@ class MainWindow(QMainWindow):
         print("[DEBUG] Переключение на вкладку Фокус")
         self.focus_setup_view.refresh()
         self.stack.setCurrentWidget(self.focus_setup_view)
+
+    def closeEvent(self, event):
+        """При закрытии главного окна сохраняем время и ставим сессию на паузу"""
+        has_session, session_id, status, topic_id = self.session_controller.has_active_or_paused_session()
+
+        if has_session and status == "active":
+            if hasattr(self, 'focus_active_view') and self.focus_active_view:
+                # Сохраняем ползунки
+                self.focus_active_view.force_save_state()
+                # Сохраняем время из таймера
+                self.focus_active_view.force_save_time()
+
+            # Ставим на паузу
+            self.session_controller.pause_session(session_id)
+            print(f"[DEBUG] При закрытии: сессия {session_id} поставлена на паузу")
+
+        self.session_controller.stop_ping_manager()
+        event.accept()
