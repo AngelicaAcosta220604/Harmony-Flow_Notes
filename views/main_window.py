@@ -46,6 +46,10 @@ class MainWindow(QMainWindow):
         main_layout = QHBoxLayout(central)
         main_layout.setContentsMargins(0, 0, 0, 0)
 
+        # Регистрируем обработчик завершения программы
+        import atexit
+        atexit.register(self._on_app_exit)
+
         # ================== Левый сайдбар ==================
         sidebar = QFrame()
         sidebar.setFixedWidth(250)
@@ -258,18 +262,80 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         """При закрытии главного окна сохраняем время и ставим сессию на паузу"""
+        print("[DEBUG] closeEvent вызван")
+
+        # Проверяем активную сессию В ПАМЯТИ контроллера, а не в БД!
+        if hasattr(self, 'session_controller') and self.session_controller.current_session_id:
+            session_id = self.session_controller.current_session_id
+            is_active = self.session_controller.is_active
+
+            print(f"[DEBUG] closeEvent: текущая сессия в памяти: id={session_id}, is_active={is_active}")
+
+            if is_active and hasattr(self, 'focus_active_view') and self.focus_active_view:
+                # Сохраняем время и ползунки
+                print("[DEBUG] closeEvent: сохраняем данные активной сессии")
+                self.focus_active_view.force_save_time()
+                self.focus_active_view.force_save_state()
+
+                # Ставим на паузу
+                self.session_controller.pause_session(session_id)
+                print(f"[DEBUG] closeEvent: сессия {session_id} поставлена на паузу")
+            elif session_id:
+                # Сессия есть в памяти, но не активна - просто меняем статус
+                print(f"[DEBUG] closeEvent: сессия {session_id} не активна, меняем статус")
+                from database.db_manager import db
+                db.execute(
+                    "UPDATE sessions SET status = ? WHERE id = ?",
+                    ('paused', session_id)
+                )
+        else:
+            # Fallback: проверяем через has_active_or_paused_session
+            has_session, session_id, status, topic_id = self.session_controller.has_active_or_paused_session()
+            if has_session and status == "active":
+                print(f"[DEBUG] closeEvent (fallback): найдена активная сессия {session_id}")
+                from database.db_manager import db
+                db.execute(
+                    "UPDATE sessions SET status = ? WHERE id = ?",
+                    ('paused', session_id)
+                )
+
+        # Останавливаем пинг-менеджер
+        self.session_controller.stop_ping_manager()
+
+        event.accept()
+
+    def _on_app_exit(self):
+        """Вызывается при завершении программы (через atexit)"""
+        print("=" * 50)
+        print("[DEBUG] _on_app_exit - СОХРАНЕНИЕ ДАННЫХ ПЕРЕД ВЫХОДОМ")
+        print("=" * 50)
+
+        # Проверяем активную сессию
         has_session, session_id, status, topic_id = self.session_controller.has_active_or_paused_session()
 
-        if has_session and status == "active":
-            if hasattr(self, 'focus_active_view') and self.focus_active_view:
-                # Сохраняем ползунки
-                self.focus_active_view.force_save_state()
-                # Сохраняем время из таймера
-                self.focus_active_view.force_save_time()
+        if has_session:
+            print(f"[DEBUG] Найдена сессия {session_id}, статус={status}")
 
-            # Ставим на паузу
-            self.session_controller.pause_session(session_id)
-            print(f"[DEBUG] При закрытии: сессия {session_id} поставлена на паузу")
+            if status == "active":
+                # Сохраняем время из таймера если есть
+                if hasattr(self, 'focus_active_view') and self.focus_active_view:
+                    print("[DEBUG] Сохраняем время из focus_active_view")
+                    self.focus_active_view.force_save_time()
+                    self.focus_active_view.force_save_state()
 
+                # Меняем статус на paused
+                from database.db_manager import db
+                db.execute(
+                    "UPDATE sessions SET status = ? WHERE id = ?",
+                    ('paused', session_id)
+                )
+                print(f"[DEBUG] Сессия {session_id} переведена в статус 'paused'")
+            else:
+                print(f"[DEBUG] Сессия уже в статусе {status}, ничего не меняем")
+        else:
+            print("[DEBUG] Нет активных сессий")
+
+        # Останавливаем пинг-менеджер
         self.session_controller.stop_ping_manager()
-        event.accept()
+
+        print("[DEBUG] Завершение программы")

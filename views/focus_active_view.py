@@ -261,7 +261,18 @@ class FocusActiveView(QWidget):
         self.ping_manager.reset_idle()
 
     def end_session(self):
-        """Завершает сессию"""
+        """Завершает сессию с подтверждением"""
+        reply = SilentMessageBox.question(
+            self,
+            "Завершить сессию?",
+            f"Вы действительно хотите завершить сессию по теме '{self.current_topic_name}'?\n\n"
+            f"📊 Текущее время: {self.timer.label.text()}\n\n"
+            f"Время будет сохранено, и вы сможете начать новую сессию."
+        )
+
+        if reply != QMessageBox.Yes:
+            return
+
         self.timer.pause()
         duration_seconds = self.timer.get_seconds()
         duration_minutes = duration_seconds // 60
@@ -271,7 +282,7 @@ class FocusActiveView(QWidget):
 
         SilentMessageBox.information(self,
                                      "Сессия завершена",
-                                     f"Сессия по теме '{self.current_topic_name}' завершена!\n\n"
+                                     f"✅ Сессия по теме '{self.current_topic_name}' завершена!\n\n"
                                      f"⏱ Длительность: {duration_minutes} минут"
                                      )
 
@@ -282,10 +293,13 @@ class FocusActiveView(QWidget):
 
     def confirm_exit(self):
         """Подтверждение выхода из сессии (окно закрывается, но сессия продолжается)"""
-        reply = SilentMessageBox.question(self,
-                                          "Выйти из сессии?",
-                                          "Сессия продолжится в фоне. Вы сможете вернуться позже."
-                                          )
+        reply = SilentMessageBox.question(
+            self,
+            "Выйти из сессии?",
+            f"Сессия по теме '{self.current_topic_name}' будет продолжена в фоне.\n\n"
+            f"Вы сможете вернуться к ней позже через вкладку Фокус или историю сессий внутри темы.\n\n"
+            f"⏱ Накопленное время: {self.timer.label.text()}"
+        )
         if reply == QMessageBox.Yes:
             self.back_to_topics.emit()
 
@@ -351,54 +365,29 @@ class FocusActiveView(QWidget):
             self.timer.set_seconds(total_seconds)
             self.timer.pause()
             self.play_pause_btn.setText("▶")
-            self.play_pause_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #4CAF50;
-                    color: white;
-                    border: none;
-                    border-radius: 30px;
-                    font-size: 24px;
-                }
-                QPushButton:hover { background-color: #45a049; }
-            """)
             self.is_active = False
             self.session_controller.is_active = False
 
         elif session.status == "active":
+            # ИСПРАВЛЕНО: Не добавляем время вручную, так как это сделает session_controller при паузе
             total_seconds = session.total_active_seconds
             print(f"[DEBUG] ACTIVE: total_active_seconds из БД={total_seconds}")
 
-            if self.session_controller.session_resume_time:
-                elapsed = int((datetime.now() - self.session_controller.session_resume_time).total_seconds())
-                total_seconds += elapsed
-                print(f"[DEBUG] ACTIVE: добавляем отрезок {elapsed} сек, итого={total_seconds}")
-
-                from database.db_manager import db
-                db.execute(
-                    "UPDATE sessions SET total_active_seconds = ? WHERE id = ?",
-                    (total_seconds, session_id)
-                )
-
+            # Просто устанавливаем время в таймер
             self.timer.set_seconds(total_seconds)
-            self.timer.start(total_seconds)
-            self.play_pause_btn.setText("⏸")
-            self.play_pause_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #FF9800;
-                    color: white;
-                    border: none;
-                    border-radius: 30px;
-                    font-size: 24px;
-                }
-                QPushButton:hover { background-color: #F57C00; }
-            """)
-            self.is_active = True
-            self.session_controller.is_active = True
-            self.session_controller.current_session_id = session_id
-            self.session_controller.session_resume_time = datetime.now()
 
-            print(f"[DEBUG] total_active_seconds из БД = {session.total_active_seconds}")
-            print(f"[DEBUG] timer.get_seconds() = {self.timer.get_seconds()}")
+            # НЕ ЗАПУСКАЕМ таймер автоматически для активной сессии при загрузке!
+            # Пользователь должен сам нажать Resume
+            self.timer.pause()
+            self.play_pause_btn.setText("▶")
+            self.is_active = False
+
+            # Важно: синхронизируем состояние контроллера
+            self.session_controller.is_active = False
+            self.session_controller.current_session_id = session_id
+            # НЕ устанавливаем session_resume_time, так как сессия не активна в памяти
+
+            print(f"[DEBUG] ACTIVE сессия загружена в режиме паузы")
 
         # Сбрасываем таймер бездействия
         self.ping_manager.reset_idle()
@@ -470,17 +459,22 @@ class FocusActiveView(QWidget):
 
     def force_save_time(self):
         """Принудительно сохраняет текущее время сессии в БД"""
-        if self.current_session_id and self.timer.running:
-            elapsed = self.timer.get_seconds()
-            if elapsed > 0:
+        if self.current_session_id and self.timer:
+            # Получаем текущее значение из таймера (даже если он на паузе)
+            current_seconds = self.timer.get_seconds()
+
+            if current_seconds > 0:
                 from database.db_manager import db
-                # Получаем текущее total_active_seconds
-                current = db.fetchone("SELECT total_active_seconds FROM sessions WHERE id = ?",
-                                      (self.current_session_id,))
-                current_total = current["total_active_seconds"] if current else 0
-                new_total = current_total + elapsed
+                print(f"[DEBUG] force_save_time: current_seconds={current_seconds}")
+
+                # Обновляем total_active_seconds в БД
                 db.execute(
                     "UPDATE sessions SET total_active_seconds = ? WHERE id = ?",
-                    (new_total, self.current_session_id)
+                    (current_seconds, self.current_session_id)
                 )
-                print(f"[DEBUG] Принудительно сохранено время: +{elapsed} сек, всего={new_total} сек")
+
+                # Проверяем результат
+                check = db.fetchone("SELECT total_active_seconds FROM sessions WHERE id = ?",
+                                    (self.current_session_id,))
+                print(
+                    f"[DEBUG] force_save_time: после сохранения total_active_seconds={check['total_active_seconds'] if check else 'None'}")

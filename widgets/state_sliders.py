@@ -96,6 +96,9 @@ class StateSliders(QWidget):
         row["debounce_timer"] = QTimer()
         row["debounce_timer"].setSingleShot(True)
 
+        # Сохраняем ссылку на лямбду, чтобы можно было отключить
+        row["timer_connection"] = None
+
         slider.valueChanged.connect(lambda v, lbl=value_label: lbl.setText(str(v)))
 
         return row
@@ -142,12 +145,19 @@ class StateSliders(QWidget):
         slider = row["slider"]
 
         def on_value_changed(value):
+            # Останавливаем старый таймер
             timer.stop()
-            try:
-                timer.timeout.disconnect()
-            except:
-                pass
-            timer.timeout.connect(lambda: self._do_save(metric, value))
+
+            # Удаляем старое соединение если есть
+            if row["timer_connection"] is not None:
+                try:
+                    timer.timeout.disconnect(row["timer_connection"])
+                except (RuntimeError, TypeError):
+                    pass
+                row["timer_connection"] = None
+
+            # Создаем новое соединение и сохраняем его
+            row["timer_connection"] = timer.timeout.connect(lambda: self._do_save(metric, value))
             timer.start(500)
 
         slider.valueChanged.connect(on_value_changed)
@@ -159,3 +169,17 @@ class StateSliders(QWidget):
             self.last_save_time[metric] = now
             if hasattr(self, 'save_callback'):
                 self.save_callback(metric, value)
+
+    def cleanup(self):
+        """Метод для очистки таймеров при закрытии"""
+        for row in [self.concentration_row, self.energy_row, self.interest_row]:
+            if row and "debounce_timer" in row:
+                timer = row["debounce_timer"]
+                if timer:
+                    timer.stop()
+                    # Отключаем сохраненное соединение
+                    if row.get("timer_connection") is not None:
+                        try:
+                            timer.timeout.disconnect(row["timer_connection"])
+                        except:
+                            pass
