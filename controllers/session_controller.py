@@ -91,26 +91,51 @@ class SessionController(QObject):
 
     def pause_session(self, session_id: int, auto: bool = False):
         print(f"[DEBUG] pause_session: сессия {session_id}, auto={auto}")
-        print(f"[DEBUG] is_active={self.is_active}, session_resume_time={self.session_resume_time}")
 
-        if self.is_active and self.session_resume_time and self.current_session_id == session_id:
+        # Получаем сессию из БД для проверки реального статуса
+        session_from_db = self.get_session(session_id)
+        if not session_from_db:
+            print(f"[DEBUG] pause: сессия {session_id} не найдена")
+            return
+
+        # Проверяем, активна ли сессия В ПАМЯТИ (только если есть активный таймер)
+        # НЕ проверяем статус в БД, потому что при перезапуске статус может быть 'active',
+        # но в памяти сессия не активна!
+        is_session_active_in_memory = self.is_active and self.current_session_id == session_id
+
+        print(f"[DEBUG] is_active (memory)={self.is_active}, session_resume_time={self.session_resume_time}")
+
+        # Добавляем время ТОЛЬКО если сессия активна в памяти (есть запущенный таймер)
+        if is_session_active_in_memory and self.session_resume_time:
             elapsed = int((datetime.now() - self.session_resume_time).total_seconds())
-            print(f"[DEBUG] pause: прошло {elapsed} сек")
+            if elapsed > 0:
+                print(f"[DEBUG] pause: прошло {elapsed} сек, добавляем к total_active_seconds")
 
-            db.execute(
-                "UPDATE sessions SET total_active_seconds = total_active_seconds + ? WHERE id = ?",
-                (elapsed, session_id)
-            )
-            self.session_resume_time = None
-            self._print_total_active(session_id)
+                db.execute(
+                    "UPDATE sessions SET total_active_seconds = total_active_seconds + ? WHERE id = ?",
+                    (elapsed, session_id)
+                )
+                self._print_total_active(session_id)
+            else:
+                print(f"[DEBUG] pause: elapsed=0, время не добавлено")
         else:
             print(f"[DEBUG] pause: условие не выполнено, время НЕ добавлено")
+            if not is_session_active_in_memory:
+                print(f"[DEBUG]   причина: сессия не активна в памяти (self.is_active={self.is_active})")
+            elif not self.session_resume_time:
+                print(f"[DEBUG]   причина: нет session_resume_time")
 
+        # Сбрасываем время возобновления
+        self.session_resume_time = None
+
+        # Обновляем статус в БД
         new_status = 'auto_paused' if auto else 'paused'
         db.execute(
             "UPDATE sessions SET status = ? WHERE id = ?",
             (new_status, session_id)
         )
+
+        # Обновляем состояние в памяти
         self.is_active = False
 
         if auto:
@@ -147,12 +172,12 @@ class SessionController(QObject):
         # Добавляем последний активный отрезок, если сессия активна
         if self.is_active and self.session_resume_time and self.current_session_id == session_id:
             elapsed = int((datetime.now() - self.session_resume_time).total_seconds())
-            print(f"[DEBUG] end: последний отрезок = {elapsed} сек")
-
-            db.execute(
-                "UPDATE sessions SET total_active_seconds = total_active_seconds + ? WHERE id = ?",
-                (elapsed, session_id)
-            )
+            if elapsed > 0:
+                print(f"[DEBUG] end: последний отрезок = {elapsed} сек")
+                db.execute(
+                    "UPDATE sessions SET total_active_seconds = total_active_seconds + ? WHERE id = ?",
+                    (elapsed, session_id)
+                )
             self.session_resume_time = None
             self._print_total_active(session_id)
 
@@ -178,7 +203,7 @@ class SessionController(QObject):
 
         if self.ping_manager:
             self.ping_manager.idle_timer.stop()
-            self.ping_manager.response_timer.stop()  # ← ИСПРАВЛЕНО
+            self.ping_manager.response_timer.stop()
 
         if topic_id:
             self._update_topic_timestamp(topic_id)
@@ -231,7 +256,6 @@ class SessionController(QObject):
 
     def get_all_sessions(self):
         rows = db.fetchall("SELECT * FROM sessions ORDER BY start_time DESC")
-
         return [Session.from_row(row) for row in rows]
 
     def delete_session(self, session_id: int):
@@ -250,10 +274,6 @@ class SessionController(QObject):
             return False
 
         try:
-            # Получаем время последнего обновления статуса (по start_time или created_at)
-            # Упрощённо: проверяем по start_time + total_active_seconds + время паузы
-            # Для простоты добавим поле last_pause_time в БД, но пока сделаем так:
-            # Если сессия на паузе и её start_time был больше N минут назад — завершаем
             start = datetime.fromisoformat(session.start_time)
             if (datetime.now() - start).total_seconds() > pause_duration_minutes * 60:
                 self.end_session(session_id)
@@ -266,30 +286,42 @@ class SessionController(QObject):
         """
         Проверяет, есть ли незавершённые сессии.
         Возвращает (has_session, session_id, status, topic_id)
+        ВОЗВРАЩАЕТ САМУЮ СВЕЖУЮ сессию (по start_time DESC)
         """
         if topic_id:
             rows = db.fetchall(
-                "SELECT id, status, topic_id FROM sessions WHERE topic_id = ? AND status IN ('active', 'paused', 'auto_paused')",
+                """SELECT id, status, topic_id FROM sessions 
+                   WHERE topic_id = ? AND status IN ('active', 'paused', 'auto_paused')
+                   ORDER BY start_time DESC""",  # ← Добавлено ORDER BY
                 (topic_id,)
             )
         else:
             rows = db.fetchall(
-                "SELECT id, status, topic_id FROM sessions WHERE status IN ('active', 'paused', 'auto_paused')"
+                """SELECT id, status, topic_id FROM sessions 
+                   WHERE status IN ('active', 'paused', 'auto_paused')
+                   ORDER BY start_time DESC""",  # ← Добавлено ORDER BY
             )
 
         if rows:
-            session = rows[0]
+            session = rows[0]  # Берем самую свежую
             return True, session['id'], session['status'], session['topic_id']
         return False, None, None, None
 
     def check_and_pause_active_session(self):
         """Проверяет и ставит на паузу любую активную сессию (при запуске приложения)"""
+        # Получаем ВСЕ активные сессии и ставим их на паузу
         rows = db.fetchall(
-            "SELECT id, status FROM sessions WHERE status = 'active'"
+            """SELECT id, status, start_time FROM sessions 
+               WHERE status = 'active'
+               ORDER BY start_time DESC"""
         )
         for row in rows:
             session_id = row['id']
-            self.pause_session(session_id)
+            # Просто меняем статус в БД, так как таймер не активен
+            db.execute(
+                "UPDATE sessions SET status = ? WHERE id = ?",
+                ('paused', session_id)
+            )
             print(f"[DEBUG] При запуске: сессия {session_id} переведена в статус 'paused'")
 
     def save_slider_values(self, session_id: int, concentration: int, energy: int, interest: int):
