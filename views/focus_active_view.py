@@ -208,7 +208,7 @@ class FocusActiveView(QWidget):
     def toggle_pause(self):
         """Пауза / Возобновление"""
         if not self.timer.running:
-            # Возобновляем
+            # Возобновляем — таймер продолжает с текущего значения
             self.timer.resume()
             self.session_controller.resume_session(self.current_session_id)
             self.pause_btn.setText("⏸ Пауза")
@@ -222,8 +222,9 @@ class FocusActiveView(QWidget):
                 }
                 QPushButton:hover { background-color: #e68900; }
             """)
+            self.is_active = True
         else:
-            # Ставим на паузу
+            # Ставим на паузу — замораживаем время
             self.timer.pause()
             self.session_controller.pause_session(self.current_session_id)
             self.pause_btn.setText("▶ Возобновить")
@@ -237,6 +238,7 @@ class FocusActiveView(QWidget):
                 }
                 QPushButton:hover { background-color: #45a049; }
             """)
+            self.is_active = False
 
     def end_session(self):
         """Завершает сессию"""
@@ -257,15 +259,13 @@ class FocusActiveView(QWidget):
         self.timer.reset()
 
     def confirm_exit(self):
-        """Подтверждение выхода"""
+        """Подтверждение выхода из сессии (окно закрывается, но сессия продолжается)"""
         reply = SilentMessageBox.question(self,
                                           "Выйти из сессии?",
-                                          "Прогресс этой сессии не сохранится. Вы уверены?"
+                                          "Сессия продолжится в фоне. Вы сможете вернуться позже."
                                           )
-
         if reply == QMessageBox.Yes:
-            if self.current_session_id:
-                self.session_controller.delete_session(self.current_session_id)
+            # Просто закрываем окно, сессия остаётся активной
             self.back_to_topics.emit()
 
     # =========================================================
@@ -300,6 +300,8 @@ class FocusActiveView(QWidget):
 
     def resume_existing_session(self, session_id: int, topic_id: int, topic_name: str):
         """Возобновляет существующую сессию"""
+        print(f"[DEBUG] resume_existing_session: session_id={session_id}")
+
         self.current_session_id = session_id
         self.current_topic_id = topic_id
         self.current_topic_name = topic_name
@@ -308,13 +310,13 @@ class FocusActiveView(QWidget):
         if not session:
             return
 
-        self.topic_label.setText(f"📚 {topic_name} (возобновлена)")
+        self.topic_label.setText(f"📚 {topic_name}")
 
-        # Устанавливаем таймер на суммарное активное время
-        total_seconds = session.total_active_seconds
-        self.timer.set_seconds(total_seconds)
-
-        if session.status == "paused":
+        # Для сессии на паузе — показываем замороженное время, таймер не запускаем
+        if session.status in ("paused", "auto_paused"):
+            total_seconds = session.total_active_seconds
+            print(f"[DEBUG] PAUSED: total_active_seconds={total_seconds}")
+            self.timer.set_seconds(total_seconds)
             self.timer.pause()
             self.pause_btn.setText("▶ Возобновить")
             self.pause_btn.setStyleSheet("""
@@ -327,7 +329,29 @@ class FocusActiveView(QWidget):
                 }
                 QPushButton:hover { background-color: #45a049; }
             """)
-        else:
+            self.is_active = False
+            self.session_controller.is_active = False
+
+        # Для активной сессии — считаем: total_active_seconds + время с момента последнего возобновления
+        elif session.status == "active":
+            # Получаем накопленное время из БД
+            total_seconds = session.total_active_seconds
+            print(f"[DEBUG] ACTIVE: total_active_seconds из БД={total_seconds}")
+
+            # Добавляем время с момента последнего возобновления (если есть)
+            if self.session_controller.session_resume_time:
+                elapsed = int((datetime.now() - self.session_controller.session_resume_time).total_seconds())
+                total_seconds += elapsed
+                print(f"[DEBUG] ACTIVE: добавляем отрезок {elapsed} сек, итого={total_seconds}")
+
+                # ВАЖНО: сохраняем обновлённое время в БД, чтобы при следующем входе не добавлять снова
+                from database.db_manager import db
+                db.execute(
+                    "UPDATE sessions SET total_active_seconds = ? WHERE id = ?",
+                    (total_seconds, session_id)
+                )
+
+            self.timer.set_seconds(total_seconds)
             self.timer.start(total_seconds)
             self.pause_btn.setText("⏸ Пауза")
             self.pause_btn.setStyleSheet("""
@@ -340,9 +364,12 @@ class FocusActiveView(QWidget):
                 }
                 QPushButton:hover { background-color: #e68900; }
             """)
+            self.is_active = True
+            self.session_controller.is_active = True
+            self.session_controller.current_session_id = session_id
+            # Сбрасываем время последнего возобновления в контроллере
+            self.session_controller.session_resume_time = datetime.now()
 
-        self.session_controller.resume_session(session_id)
-        self.is_active = True
         self.pause_btn.setEnabled(True)
         self.end_btn.setEnabled(True)
 

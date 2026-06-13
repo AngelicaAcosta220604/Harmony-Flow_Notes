@@ -322,7 +322,36 @@ class SessionsView(QWidget):
             self.load_sessions()
 
     def _on_start_session(self):
-        self.start_session_requested.emit(self.topic_id, self.topic_name)
+        # Проверяем, есть ли уже активная сессия
+        has_session, session_id, status, existing_topic_id = self.session_controller.has_active_or_paused_session(
+            self.topic_id)
+
+        if has_session:
+            reply = SilentMessageBox.question(
+                self,
+                "Незавершённая сессия",
+                f"У вас есть {self._get_status_text_for_dialog(status)} сессия для этой темы.\n\n"
+                "• Нажмите «Да» — чтобы завершить её и начать новую\n"
+                "• Нажмите «Нет» — чтобы продолжить существующую сессию",
+                QMessageBox.Yes | QMessageBox.No
+            )
+            if reply == QMessageBox.Yes:
+                # Да = завершить старую и начать новую
+                self.session_controller.end_session(session_id)
+                self.start_session_requested.emit(self.topic_id, self.topic_name)
+            else:
+                # Нет = продолжить существующую
+                self.resume_session_requested.emit(session_id, self.topic_name)
+        else:
+            self.start_session_requested.emit(self.topic_id, self.topic_name)
+
+    def _get_status_text_for_dialog(self, status: str) -> str:
+        status_map = {
+            "active": "активную",
+            "paused": "приостановленную",
+            "auto_paused": "автоматически приостановленную"
+        }
+        return status_map.get(status, "незавершённую")
 
     def refresh(self):
         self.load_sessions()

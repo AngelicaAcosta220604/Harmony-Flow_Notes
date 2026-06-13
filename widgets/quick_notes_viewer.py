@@ -2,7 +2,7 @@
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QPushButton,
-    QLabel, QScrollArea, QFrame, QWidget
+    QLabel, QScrollArea, QFrame, QWidget, QMessageBox
 )
 from PySide6.QtCore import Qt
 from widgets.silent_dialog import SilentMessageBox
